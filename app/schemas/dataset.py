@@ -1,0 +1,29 @@
+from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict
+
+
+class DatasetResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    original_file_name: str
+    stored_file_name: str
+    file_type: str
+    mime_type: str
+    file_size: int
+    cloudinary_url: str
+    cloudinary_resource_type: str
+    upload_status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class DatasetListResponse(BaseModel):
+    items: list[DatasetResponse]
+    total: int
+
+
+class DatasetDeleteResponse(BaseModel):
+    status: str = "deleted"

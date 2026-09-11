@@ -1,0 +1,5 @@
+{
+  "dependencies": ["langgraph"],
+  "graphs": {"insightforge_topology": "./app/graph/studio.py:graph"},
+  "env": ".env.studio"
+}

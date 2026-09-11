@@ -1,0 +1,2 @@
+# Optional development-only Agent Server. Not required for normal API execution.
+langgraph-cli[inmem]>=0.4,<1

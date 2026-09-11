@@ -1,0 +1,56 @@
+from functools import lru_cache
+from pathlib import Path
+from typing import Literal
+
+from pydantic import Field, PostgresDsn, SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Application settings loaded from environment variables or a local .env file."""
+
+    app_name: str = "InsightForge API"
+    app_env: str = "development"
+    debug: bool = False
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    console_log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    sql_log_level: Literal["WARNING", "ERROR", "CRITICAL"] = "WARNING"
+    log_dir: Path = Path("logs")
+    log_max_bytes: int = Field(default=5_000_000, gt=0)
+    log_backup_count: int = Field(default=5, ge=1, le=20)
+    sql_echo: bool = False
+    api_v1_prefix: str = "/api/v1"
+    database_url: PostgresDsn
+    frontend_url: str = "http://localhost:5173"
+    google_client_id: str = ""
+    langsmith_enabled: bool = False
+    langsmith_detail_mode: bool = False
+    langsmith_api_key: SecretStr | None = None
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
+    langsmith_project: str = "insightforge"
+    jwt_secret_key: SecretStr = Field(min_length=32)
+    jwt_algorithm: Literal["HS256", "HS384", "HS512"] = "HS256"
+    access_token_expire_minutes: int = Field(default=30, gt=0)
+    refresh_token_expire_days: int = Field(default=7, gt=0)
+    cloudinary_cloud_name: str = Field(min_length=1)
+    cloudinary_api_key: SecretStr = Field(min_length=1)
+    cloudinary_api_secret: SecretStr = Field(min_length=1)
+    max_upload_size_mb: int = Field(default=25, gt=0)
+    max_profile_rows: int = Field(default=500_000, gt=0)
+    gemini_api_key: SecretStr | None = None
+    gemini_model: str | None = None
+    groq_api_key: SecretStr | None = None
+    groq_model: str | None = None
+    llm_request_timeout_seconds: int = Field(default=60, gt=0, le=300)
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()  # type: ignore[call-arg]
