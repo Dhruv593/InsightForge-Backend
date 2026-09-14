@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +8,12 @@ from app.core.exceptions import DatabaseConnectionError
 from app.db.session import get_db_session
 
 router = APIRouter(prefix="/health", tags=["health"])
+
+
+@router.head("", include_in_schema=False)
+async def health_check_head() -> Response:
+    """Support lightweight uptime probes without touching PostgreSQL."""
+    return Response(status_code=200, headers={"Cache-Control": "no-store"})
 
 
 @router.get("")
