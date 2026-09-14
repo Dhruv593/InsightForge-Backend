@@ -11,7 +11,7 @@ from app.services.llm.base import LLMProviderError
 from app.services.llm.llm_service import LLMService
 from app.tools.statistics import StatisticalToolRegistry
 
-INTERPRET_PROMPT = """Interpret the deterministic statistical result cautiously in plain text. Do not return JSON or a schema. Statistical significance is not business significance; correlation is not causation; non-significance is not proof of no relationship. Introduce no numeric value absent from the result."""
+from app.prompts.statistical_validator_prompt import SYSTEM_PROMPT as INTERPRET_PROMPT
 
 
 class StatisticalValidatorAgent:

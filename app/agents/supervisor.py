@@ -6,11 +6,7 @@ from app.schemas.supervisor import SupervisorDecision
 from app.services.analysis_plan_service import AnalysisPlanService
 from app.services.llm.llm_service import LLMService
 
-SUPERVISOR_PROMPT = """You are the Supervisor Agent for InsightForge.
-
-Classify the user's analytical request and determine whether the verified dataset can support it. Do not calculate numerical results, answer the business question, invent columns, or invent dataset content. Use only the user's question, verified bounded profile, and recent conversation context.
-
-Determine the query type, objective, target metrics, relevant dimensions, whether statistics may be needed, whether visualization would be useful, and whether sufficient information exists. If required information is absent, mark the request unsupported, leave invented/nonexistent columns out of target fields, and explicitly describe the missing information. Return only the required structured schema."""
+from app.prompts.supervisor_prompt import SYSTEM_PROMPT as SUPERVISOR_PROMPT, OUTPUT_MODEL
 
 
 class SupervisorAgent:
@@ -35,7 +31,7 @@ class SupervisorAgent:
                     "recent_conversation": conversation_context,
                 }, ensure_ascii=False)),
             ],
-            response_model=SupervisorDecision,
+            response_model=OUTPUT_MODEL,
         )
         decision = AnalysisPlanService.validate_supervisor(
             SupervisorDecision.model_validate(result.content),

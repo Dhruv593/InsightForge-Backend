@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from app.prompts.llm_recovery_prompt import STRUCTURED_RETRY_PROMPT
 from app.core.tracing import trace_event
 
 from pydantic import BaseModel
@@ -57,7 +58,7 @@ class LLMService:
                     raise
                 logger.warning("Retrying LLM response provider=%s error_code=%s attempt=2", selected.provider_name, exc.code)
                 if exc.code == "LLM_INVALID_RESPONSE" and response_model is not None:
-                    request_messages.append(LLMMessage(role="user", content="The previous response could not be validated. Produce a complete response matching the required schema exactly. Include every required field, use only the supplied columns and evidence, and do not add markdown or unsupported values."))
+                    request_messages.append(LLMMessage(role="user", content=STRUCTURED_RETRY_PROMPT))
                 await asyncio.sleep(0.5)
 
     def model_name(self, provider: str) -> str:

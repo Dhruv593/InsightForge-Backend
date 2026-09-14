@@ -11,11 +11,8 @@ from app.services.analysis_plan_service import AnalysisPlanService, AgentSemanti
 from app.services.llm.base import LLMProviderError
 from app.services.llm.llm_service import LLMService
 
-PLANNER_PROMPT = """You are the Analysis Planning Agent for InsightForge.
+from app.prompts.planner_prompt import SYSTEM_PROMPT as PLANNER_PROMPT, OUTPUT_MODEL
 
-Convert the user's analytical question into a minimal valid sequence of future analytical tasks. Do not execute calculations or provide numerical/business answers. Use only verified dataset columns. Each task must answer part of the question, use a supported analysis type, specify required columns and a clear method, identify dependencies, and avoid unnecessary analysis. Prefer the simplest valid approach. Never invent columns or infer causal relationships from observational data. Return only the required structured AnalysisPlanOutput."""
-
-PLANNER_PROMPT += " Do not create a separate analytical task just to visualize an existing result. The visualization stage reuses calculated evidence. For regional revenue percentages with visuals, calculate regional totals once; do not repeat the same aggregation as a visualization task."
 
 
 class PlannerAgent:
@@ -65,7 +62,7 @@ class PlannerAgent:
                     "verified_columns": verified_columns,
                 }, ensure_ascii=False)),
             ],
-            response_model=AnalysisPlanOutput,
+            response_model=OUTPUT_MODEL,
         )
         plan = AnalysisPlanService.validate_plan(
             AnalysisPlanOutput.model_validate(result.content),

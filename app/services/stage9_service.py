@@ -1,4 +1,5 @@
 from app.core.tracing import traced
+from app.services.revenue_recommendations import revenue_recommendations
 
 from collections.abc import Awaitable, Callable
 import logging
@@ -420,9 +421,9 @@ class Stage9Service:
             statistical_findings=[item["interpretation"] for item in validations if item.get("interpretation")],
             data_notes=[item["message"] for item in quality_warnings if item.get("message")],
             limitations=list(dict.fromkeys([warning for item in evidence for warning in item.get("limitations", [])] + ["This report was assembled deterministically from saved evidence and accepted claims."])),
-            recommendations=[],
+            recommendations=revenue_recommendations(evidence),
         ).model_dump(mode="json")
-        model = Report(analysis_run_id=run.id, executive_summary=payload["executive_summary"], key_findings=payload["key_findings"], statistical_findings=payload["statistical_findings"], data_notes=payload["data_notes"], limitations=payload["limitations"], recommendations=[], report=payload)
+        model = Report(analysis_run_id=run.id, executive_summary=payload["executive_summary"], key_findings=payload["key_findings"], statistical_findings=payload["statistical_findings"], data_notes=payload["data_notes"], limitations=payload["limitations"], recommendations=payload["recommendations"], report=payload)
         try:
             await self.reports.create(model); await self.session.commit()
         except Exception as exc:

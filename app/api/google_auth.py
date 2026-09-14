@@ -32,13 +32,19 @@ def check_origin(request: Request):
     return settings
 
 
+def cookie_policy(frontend_url: str) -> dict[str, object]:
+    """Allow the nonce across the separately hosted frontend and API in production."""
+    secure = frontend_url.startswith("https://")
+    return {"secure": secure, "samesite": "none" if secure else "lax"}
+
+
 @router.post("/challenge")
 async def challenge(request: Request, response: Response):
     settings = check_origin(request)
     nonce = secrets.token_urlsafe(32)
     response.set_cookie(COOKIE, nonce, max_age=300, httponly=True,
-                        secure=settings.frontend_url.startswith("https://"), samesite="lax",
-                        path=f"{settings.api_v1_prefix}/auth/google")
+                        path=f"{settings.api_v1_prefix}/auth/google",
+                        **cookie_policy(settings.frontend_url))
     response.headers["Cache-Control"] = "no-store"
     return {"nonce": nonce, "client_id": settings.google_client_id}
 
@@ -94,6 +100,7 @@ async def google_login(payload: GoogleLoginRequest, request: Request, response: 
     except IntegrityError:
         await service.session.rollback()
         raise AppError("GOOGLE_ACCOUNT_CONFLICT", "An account was just created for this identity. Please try signing in again.", 409) from None
-    response.delete_cookie(COOKIE, path=f"{settings.api_v1_prefix}/auth/google")
+    response.delete_cookie(COOKIE, path=f"{settings.api_v1_prefix}/auth/google",
+                           **cookie_policy(settings.frontend_url))
     response.headers["Cache-Control"] = "no-store"
     return AuthResponse(user=UserResponse.model_validate(user), access_token=tokens.access_token, refresh_token=tokens.refresh_token)

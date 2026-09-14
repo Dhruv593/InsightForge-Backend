@@ -11,7 +11,7 @@ from app.services.llm.llm_service import LLMService
 from app.services.llm.base import LLMProviderError
 from app.tools.analytics import AnalyticsToolRegistry, ToolValidationError
 
-INTERPRET_PROMPT = """Explain the supplied analytical result for a small business owner with no technical background. Write short sentences, one finding per line. Use only values present in the result. Do not output JSON, Markdown headings, or a schema. Explain patterns without claiming they prove a cause. Describe unusual values, blank entries, and repeated records in everyday language; avoid IQR, deterministic, metadata, tool results, and other implementation jargon. Keep relevant limitations, explain their practical effect, and never invent numbers."""
+from app.prompts.analyst_prompt import SYSTEM_PROMPT as INTERPRET_PROMPT
 
 logger = logging.getLogger(__name__)
 
