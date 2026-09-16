@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request, status
 
 from app.api.dependencies import (
     CurrentUser,
@@ -10,7 +10,7 @@ from app.api.dependencies import (
 )
 from app.schemas.agent_run import AgentRunListResponse, AgentRunResponse
 from app.schemas.analysis_plan import AnalysisPlanResponse
-from app.schemas.analysis_run import AnalysisExecutionResponse, AnalysisRunResponse
+from app.schemas.analysis_run import ActiveAnalysisQueueResponse, AnalysisQueueResponse, AnalysisRunResponse, AnalysisRunRetry, ConversationQueryResponse
 from app.schemas.message import MessageResponse
 from app.schemas.evidence import EvidenceListResponse, EvidenceResponse
 from app.schemas.statistical_validation import StatisticalValidationListResponse, StatisticalValidationResponse
@@ -23,20 +23,66 @@ from app.services.analysis_run_service import AnalysisRunService
 router = APIRouter(prefix="/analysis-runs", tags=["analysis-runs"])
 
 
-@router.post("/{analysis_run_id}/execute", response_model=AnalysisExecutionResponse)
+@router.get("/queue/active", response_model=ActiveAnalysisQueueResponse)
+async def list_active_queue(user: CurrentUser, service: Annotated[AnalysisRunService, Depends(get_analysis_run_service)]) -> ActiveAnalysisQueueResponse:
+    items = await service.list_active_runs(user)
+    return ActiveAnalysisQueueResponse(items=[AnalysisRunResponse.model_validate(item) for item in items], total=len(items))
+
+
+@router.post("/{analysis_run_id}/execute", response_model=AnalysisQueueResponse, status_code=status.HTTP_202_ACCEPTED)
 async def execute_analysis_run(
     analysis_run_id: UUID,
+    request: Request,
     user: CurrentUser,
     service: Annotated[
-        AnalysisExecutionService,
-        Depends(get_analysis_execution_service),
+        AnalysisRunService,
+        Depends(get_analysis_run_service),
     ],
-) -> AnalysisExecutionResponse:
-    analysis_run, message = await service.execute(analysis_run_id, user)
-    return AnalysisExecutionResponse(
-        analysis_run=AnalysisRunResponse.model_validate(analysis_run),
-        message=MessageResponse.model_validate(message),
-    )
+) -> AnalysisQueueResponse:
+    analysis_run, queue_position = await service.queue_position(analysis_run_id, user)
+    queue = getattr(request.app.state, "analysis_queue", None)
+    if queue:
+        queue.notify()
+    return AnalysisQueueResponse(analysis_run=AnalysisRunResponse.model_validate(analysis_run), queue_position=queue_position)
+
+
+@router.post("/{analysis_run_id}/retry", response_model=ConversationQueryResponse, status_code=status.HTTP_201_CREATED)
+async def retry_analysis_run(
+    analysis_run_id: UUID,
+    payload: AnalysisRunRetry,
+    request: Request,
+    user: CurrentUser,
+    service: Annotated[AnalysisRunService, Depends(get_analysis_run_service)],
+) -> ConversationQueryResponse:
+    message, analysis_run = await service.retry_run(analysis_run_id, user, payload.llm_provider)
+    queue = getattr(request.app.state, "analysis_queue", None)
+    if queue:
+        queue.notify()
+    return ConversationQueryResponse(message=MessageResponse.model_validate(message), analysis_run=AnalysisRunResponse.model_validate(analysis_run))
+
+
+@router.post("/{analysis_run_id}/cancel", response_model=AnalysisRunResponse)
+async def cancel_analysis_run(
+    analysis_run_id: UUID,
+    request: Request,
+    user: CurrentUser,
+    service: Annotated[AnalysisRunService, Depends(get_analysis_run_service)],
+) -> AnalysisRunResponse:
+    analysis_run = await service.cancel_run(analysis_run_id, user)
+    queue = getattr(request.app.state, "analysis_queue", None)
+    if queue:
+        queue.cancel(analysis_run_id)
+    return AnalysisRunResponse.model_validate(analysis_run)
+
+
+@router.get("/{analysis_run_id}/queue", response_model=AnalysisQueueResponse)
+async def get_queue_status(
+    analysis_run_id: UUID,
+    user: CurrentUser,
+    service: Annotated[AnalysisRunService, Depends(get_analysis_run_service)],
+) -> AnalysisQueueResponse:
+    analysis_run, queue_position = await service.queue_position(analysis_run_id, user)
+    return AnalysisQueueResponse(analysis_run=AnalysisRunResponse.model_validate(analysis_run), queue_position=queue_position)
 
 
 @router.get("/{analysis_run_id}/agent-runs", response_model=AgentRunListResponse)

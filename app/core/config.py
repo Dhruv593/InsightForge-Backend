@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     database_url: PostgresDsn
     frontend_url: str = "http://localhost:5173"
+    admin_emails: str = ""
+    langsmith_project_url: str = ""
     google_client_id: str = ""
     langsmith_enabled: bool = False
     langsmith_detail_mode: bool = False
@@ -32,6 +34,12 @@ class Settings(BaseSettings):
     jwt_algorithm: Literal["HS256", "HS384", "HS512"] = "HS256"
     access_token_expire_minutes: int = Field(default=30, gt=0)
     refresh_token_expire_days: int = Field(default=7, gt=0)
+    smtp_host: str = ""
+    smtp_port: int = Field(default=587, gt=0)
+    smtp_username: str = ""
+    smtp_password: SecretStr | None = None
+    smtp_from_email: str = ""
+    smtp_use_tls: bool = True
     cloudinary_cloud_name: str = Field(min_length=1)
     cloudinary_api_key: SecretStr = Field(min_length=1)
     cloudinary_api_secret: SecretStr = Field(min_length=1)

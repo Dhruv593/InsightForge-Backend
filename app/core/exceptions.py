@@ -8,10 +8,11 @@ from fastapi.responses import JSONResponse
 class AppError(Exception):
     """Base exception for errors safe to expose to API clients."""
 
-    def __init__(self, code: str, message: str, status_code: int) -> None:
+    def __init__(self, code: str, message: str, status_code: int, details: dict[str, Any] | None = None) -> None:
         self.code = code
         self.message = message
         self.status_code = status_code
+        self.details = details
         super().__init__(message)
 
 
@@ -276,6 +277,16 @@ class AnalysisRunNotExecutableError(AppError):
         )
 
 
+class DuplicateAnalysisRunError(AppError):
+    def __init__(self, analysis_run_id: Any, run_status: str) -> None:
+        super().__init__(
+            code="DUPLICATE_ANALYSIS_RUN",
+            message="A similar analysis already exists for this dataset.",
+            status_code=status.HTTP_409_CONFLICT,
+            details={"analysis_run_id": str(analysis_run_id), "status": run_status},
+        )
+
+
 class LLMRequestError(AppError):
     _STATUS_CODES = {
         "LLM_PROVIDER_UNAVAILABLE": status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -364,21 +375,24 @@ class ReportNotFoundError(AppError):
         super().__init__("REPORT_NOT_FOUND", "Analysis report not found.", status.HTTP_404_NOT_FOUND)
 
 
-def _error_payload(code: str, message: str) -> dict[str, Any]:
-    return {
+def _error_payload(code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = {
         "success": False,
         "error": {
             "code": code,
             "message": message,
         },
     }
+    if details:
+        payload["error"]["details"] = details
+    return payload
 
 
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     del request
     return JSONResponse(
         status_code=exc.status_code,
-        content=_error_payload(exc.code, exc.message),
+        content=_error_payload(exc.code, exc.message, exc.details),
     )
 
 

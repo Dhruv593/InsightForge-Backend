@@ -1,4 +1,5 @@
 from typing import Annotated
+import logging
 
 from fastapi import APIRouter, Depends, status
 
@@ -13,6 +14,9 @@ from app.schemas.auth import (
     UserResponse,
 )
 from app.services.auth_service import AuthService, IssuedTokens
+from app.services.account_service import AccountService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -38,6 +42,10 @@ async def register(
         email=str(payload.email),
         password=payload.password,
     )
+    try:
+        await AccountService(auth_service.session).send_verification(user)
+    except Exception:
+        logger.exception("Initial verification email could not be prepared user_id=%s", user.id)
     return AuthResponse(user=UserResponse.model_validate(user), **_token_response(tokens).model_dump())
 
 

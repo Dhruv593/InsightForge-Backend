@@ -17,6 +17,7 @@ from app.models.dataset_profile import DatasetProfile, DatasetProfileStatus
 from app.models.message import Message
 from app.models.user import User
 from app.models.user_session import UserSession
+from app.models.account_token import AccountToken
 
 __all__ = [
     "AnalysisRun",
@@ -38,4 +39,5 @@ __all__ = [
     "Message",
     "User",
     "UserSession",
+    "AccountToken",
 ]

@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 from time import perf_counter
 from uuid import uuid4
 
@@ -12,6 +13,8 @@ from app.api.analysis_runs import router as analysis_runs_router
 from app.api.conversations import router as conversations_router
 from app.api.datasets import router as datasets_router
 from app.api.health import router as health_router
+from app.api.account import router as account_router
+from app.api.monitoring import router as monitoring_router
 from app.core.config import get_settings
 from app.core.logging_config import setup_logging
 from app.core.exceptions import (
@@ -20,8 +23,20 @@ from app.core.exceptions import (
     unexpected_error_handler,
     validation_error_handler,
 )
+from app.services.analysis_job_queue import AnalysisJobQueue
 
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def application_lifespan(application: FastAPI):
+    queue = AnalysisJobQueue()
+    application.state.analysis_queue = queue
+    await queue.start()
+    try:
+        yield
+    finally:
+        await queue.stop()
 
 
 def create_application() -> FastAPI:
@@ -30,6 +45,7 @@ def create_application() -> FastAPI:
     application = FastAPI(
         title=settings.app_name,
         debug=settings.debug,
+        lifespan=application_lifespan,
     )
 
     application.add_middleware(
@@ -82,6 +98,8 @@ def create_application() -> FastAPI:
     application.include_router(datasets_router, prefix=settings.api_v1_prefix)
     application.include_router(conversations_router, prefix=settings.api_v1_prefix)
     application.include_router(analysis_runs_router, prefix=settings.api_v1_prefix)
+    application.include_router(account_router, prefix=settings.api_v1_prefix)
+    application.include_router(monitoring_router, prefix=settings.api_v1_prefix)
 
     logger.info("Application logging configured log_dir=%s", log_dir)
 

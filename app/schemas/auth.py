@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -47,6 +48,57 @@ class UserResponse(BaseModel):
     name: str
     email: EmailStr
     is_active: bool
+    is_admin: bool = False
+    password_configured: bool = False
+    is_email_verified: bool = False
+
+
+class ProfileUpdateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Name must not contain only whitespace.")
+        return value
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str | None = Field(default=None, max_length=1024)
+    new_password: str = Field(min_length=8, max_length=1024)
+
+
+class AccountDeleteRequest(BaseModel):
+    password: str | None = Field(default=None, max_length=1024)
+    confirmation: str
+
+
+class ForgotPasswordRequest(EmailRequest):
+    pass
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=500)
+    new_password: str = Field(min_length=8, max_length=1024)
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=500)
+
+
+class SessionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    created_at: datetime
+    expires_at: datetime
+    revoked_at: datetime | None
+
+
+class SessionListResponse(BaseModel):
+    items: list[SessionResponse]
+    total: int
 
 
 class TokenResponse(BaseModel):

@@ -89,11 +89,12 @@ async def google_login(payload: GoogleLoginRequest, request: Request, response: 
             if await service.users.get_by_email(email):
                 raise AppError("GOOGLE_ACCOUNT_EXISTS", "This email already has an account. Please log in with your existing password.", 409)
             user = User(name=(str(claims.get("name") or email.split("@")[0]).strip() or "Google user")[:255],
-                        email=email, google_subject=claims["sub"], password_hash=None)
+                        email=email, google_subject=claims["sub"], password_hash=None, is_email_verified=True)
             service.session.add(user)
             await service.session.flush()
         if not user.is_active:
             raise InactiveUserError
+        user.is_email_verified = True
         tokens = await service._issue_tokens(user.id)
         await service.session.commit()
         await service.session.refresh(user)

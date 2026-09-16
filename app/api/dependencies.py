@@ -4,7 +4,7 @@ from fastapi import Depends, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import InvalidAccessTokenError
+from app.core.exceptions import AppError, InvalidAccessTokenError
 from app.db.session import get_db_session
 from app.models.user import User
 from app.services.auth_service import AuthService
@@ -73,3 +73,12 @@ async def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+async def get_current_admin_user(user: CurrentUser) -> User:
+    if not user.is_admin:
+        raise AppError("ADMIN_ACCESS_REQUIRED", "Owner access is required.", 403)
+    return user
+
+
+AdminUser = Annotated[User, Depends(get_current_admin_user)]

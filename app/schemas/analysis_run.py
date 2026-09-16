@@ -9,6 +9,11 @@ from app.schemas.message import MessageResponse
 class AnalysisRunCreate(BaseModel):
     query: str
     llm_provider: str
+    force: bool = False
+
+
+class AnalysisRunRetry(BaseModel):
+    llm_provider: str | None = None
 
 
 class AnalysisRunResponse(BaseModel):
@@ -41,3 +46,13 @@ class ConversationQueryResponse(BaseModel):
 class AnalysisExecutionResponse(BaseModel):
     analysis_run: AnalysisRunResponse
     message: MessageResponse
+
+
+class AnalysisQueueResponse(BaseModel):
+    analysis_run: AnalysisRunResponse
+    queue_position: int | None = None
+
+
+class ActiveAnalysisQueueResponse(BaseModel):
+    items: list[AnalysisRunResponse]
+    total: int

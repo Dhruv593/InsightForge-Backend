@@ -116,9 +116,15 @@ class AuthService:
             await self.session.commit()
 
     async def get_user_from_access_token(self, access_token: str) -> User:
-        user_id = self._decode_user_id(access_token, "access")
+        try:
+            payload = decode_token(access_token, "access")
+            user_id = UUID(payload["sub"])
+        except (TokenDecodeError, TypeError, ValueError, KeyError) as exc:
+            raise InvalidAccessTokenError from exc
         user = await self.users.get_by_id(user_id)
         if user is None:
+            raise InvalidAccessTokenError
+        if payload.get("ver") != user.token_version:
             raise InvalidAccessTokenError
         if not user.is_active:
             raise InactiveUserError
@@ -135,8 +141,11 @@ class AuthService:
             refresh_token_hash=hash_refresh_token(refresh_token),
             expires_at=refresh_expires_at,
         )
+        user = await self.users.get_by_id(user_id)
+        if user is None:
+            raise InvalidAccessTokenError
         return IssuedTokens(
-            access_token=create_access_token(user_id),
+            access_token=create_access_token(user_id, user.token_version),
             refresh_token=refresh_token,
         )
 

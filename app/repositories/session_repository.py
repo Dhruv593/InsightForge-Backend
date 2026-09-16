@@ -63,3 +63,17 @@ class SessionRepository:
             )
             .values(revoked_at=datetime.now(timezone.utc)),
         )
+
+    async def list_for_user(self, user_id: UUID) -> list[UserSession]:
+        result = await self.session.execute(
+            select(UserSession).where(UserSession.user_id == user_id).order_by(UserSession.created_at.desc())
+        )
+        return list(result.scalars().all())
+
+    async def revoke_by_id_for_user(self, session_id: UUID, user_id: UUID) -> bool:
+        result = await self.session.execute(
+            update(UserSession)
+            .where(UserSession.id == session_id, UserSession.user_id == user_id, UserSession.revoked_at.is_(None))
+            .values(revoked_at=datetime.now(timezone.utc))
+        )
+        return bool(result.rowcount)

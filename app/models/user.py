@@ -2,12 +2,13 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, Index, String, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, Index, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
 if TYPE_CHECKING:
+    from app.models.account_token import AccountToken
     from app.models.analysis_run import AnalysisRun
     from app.models.conversation import Conversation
     from app.models.dataset import Dataset
@@ -32,6 +33,8 @@ class User(Base):
         default=True,
         server_default="true",
     )
+    is_email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    token_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -60,3 +63,14 @@ class User(Base):
     analysis_runs: Mapped[list["AnalysisRun"]] = relationship(
         back_populates="user", cascade="all, delete-orphan", passive_deletes=True,
     )
+    account_tokens: Mapped[list["AccountToken"]] = relationship(back_populates="user", cascade="all, delete-orphan", passive_deletes=True)
+
+    @property
+    def is_admin(self) -> bool:
+        from app.core.config import get_settings
+        allowed = {item.strip().lower() for item in get_settings().admin_emails.split(",") if item.strip()}
+        return self.email.lower() in allowed
+
+    @property
+    def password_configured(self) -> bool:
+        return bool(self.password_hash)

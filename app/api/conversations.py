@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 
 from app.api.dependencies import (
     CurrentUser,
@@ -90,12 +90,16 @@ async def delete_conversation(
 async def create_query(
     conversation_id: UUID,
     payload: AnalysisRunCreate,
+    request: Request,
     user: CurrentUser,
     service: Annotated[AnalysisRunService, Depends(get_analysis_run_service)],
 ) -> ConversationQueryResponse:
     message, analysis_run = await service.create_pending_run(
-        conversation_id, payload.query, payload.llm_provider, user
+        conversation_id, payload.query, payload.llm_provider, user, force=payload.force
     )
+    queue = getattr(request.app.state, "analysis_queue", None)
+    if queue:
+        queue.notify()
     return ConversationQueryResponse(
         message=MessageResponse.model_validate(message),
         analysis_run=AnalysisRunResponse.model_validate(analysis_run),
