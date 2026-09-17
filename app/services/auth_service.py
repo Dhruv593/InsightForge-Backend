@@ -119,12 +119,15 @@ class AuthService:
         try:
             payload = decode_token(access_token, "access")
             user_id = UUID(payload["sub"])
+            session_id = UUID(payload["sid"])
         except (TokenDecodeError, TypeError, ValueError, KeyError) as exc:
             raise InvalidAccessTokenError from exc
         user = await self.users.get_by_id(user_id)
         if user is None:
             raise InvalidAccessTokenError
         if payload.get("ver") != user.token_version:
+            raise InvalidAccessTokenError
+        if not await self.sessions.is_active(session_id, user.id):
             raise InvalidAccessTokenError
         if not user.is_active:
             raise InactiveUserError
@@ -136,7 +139,7 @@ class AuthService:
             days=settings.refresh_token_expire_days,
         )
         refresh_token = create_refresh_token(user_id, refresh_expires_at)
-        await self.sessions.create(
+        stored_session = await self.sessions.create(
             user_id=user_id,
             refresh_token_hash=hash_refresh_token(refresh_token),
             expires_at=refresh_expires_at,
@@ -145,7 +148,7 @@ class AuthService:
         if user is None:
             raise InvalidAccessTokenError
         return IssuedTokens(
-            access_token=create_access_token(user_id, user.token_version),
+            access_token=create_access_token(user_id, user.token_version, stored_session.id),
             refresh_token=refresh_token,
         )
 

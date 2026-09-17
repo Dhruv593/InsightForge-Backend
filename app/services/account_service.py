@@ -69,6 +69,7 @@ class AccountService:
                     resource_type=dataset.cloudinary_resource_type,
                     user_id=user.id,
                     dataset_id=dataset.id,
+                    delivery_type="authenticated" if "/raw/authenticated/" in dataset.cloudinary_url else "upload",
                 )
             except CloudinaryDeleteError as exc:
                 raise AppError("ACCOUNT_DATA_DELETE_FAILED", "Stored dataset files could not be deleted. Please try again.", 502) from exc
@@ -83,7 +84,7 @@ class AccountService:
         raw = await self._create_token(user.id, "email_verification", hours=24)
         url = f"{get_settings().frontend_url.rstrip('/')}/verify-email?token={raw}"
         try:
-            await self.email.send(recipient=user.email, subject="Verify your InsightForge email", body=f"Verify your email by opening this link:\n\n{url}\n\nThis link expires in 24 hours.")
+            await self.email.send(recipient=user.email, subject="Verify your Tatparya email", body=f"Verify your email by opening this link:\n\n{url}\n\nThis link expires in 24 hours.")
         except EmailDeliveryUnavailable as exc:
             raise AppError("EMAIL_DELIVERY_NOT_CONFIGURED", "Email delivery is not configured yet.", 503) from exc
 
@@ -106,7 +107,7 @@ class AccountService:
         raw = await self._create_token(user.id, "password_reset", hours=1)
         url = f"{get_settings().frontend_url.rstrip('/')}/reset-password?token={raw}"
         try:
-            await self.email.send(recipient=user.email, subject="Reset your InsightForge password", body=f"Reset your password by opening this link:\n\n{url}\n\nThis link expires in one hour.")
+            await self.email.send(recipient=user.email, subject="Reset your Tatparya password", body=f"Reset your password by opening this link:\n\n{url}\n\nThis link expires in one hour.")
         except Exception:
             logger.exception("Password reset email could not be delivered user_id=%s", user.id)
 

@@ -38,7 +38,7 @@ class LoginRequest(EmailRequest):
 
 
 class RefreshTokenRequest(BaseModel):
-    refresh_token: str = Field(min_length=1)
+    refresh_token: str = Field(min_length=1, max_length=4096)
 
 
 class UserResponse(BaseModel):
@@ -72,7 +72,7 @@ class PasswordChangeRequest(BaseModel):
 
 class AccountDeleteRequest(BaseModel):
     password: str | None = Field(default=None, max_length=1024)
-    confirmation: str
+    confirmation: str = Field(max_length=20)
 
 
 class ForgotPasswordRequest(EmailRequest):

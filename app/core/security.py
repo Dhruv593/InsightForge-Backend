@@ -34,6 +34,7 @@ def _create_token(
     *,
     token_id: UUID | None = None,
     token_version: int | None = None,
+    session_id: UUID | None = None,
 ) -> str:
     settings = get_settings()
     issued_at = datetime.now(timezone.utc)
@@ -47,6 +48,8 @@ def _create_token(
         payload["jti"] = str(token_id)
     if token_version is not None:
         payload["ver"] = token_version
+    if session_id is not None:
+        payload["sid"] = str(session_id)
 
     return jwt.encode(
         payload,
@@ -55,12 +58,12 @@ def _create_token(
     )
 
 
-def create_access_token(user_id: UUID, token_version: int = 0) -> str:
+def create_access_token(user_id: UUID, token_version: int = 0, session_id: UUID | None = None) -> str:
     settings = get_settings()
     expires_at = datetime.now(timezone.utc) + timedelta(
         minutes=settings.access_token_expire_minutes,
     )
-    return _create_token(user_id, "access", expires_at, token_version=token_version)
+    return _create_token(user_id, "access", expires_at, token_version=token_version, session_id=session_id)
 
 
 def create_refresh_token(

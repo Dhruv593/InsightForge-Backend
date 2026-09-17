@@ -1,12 +1,14 @@
 import csv
 import io
 import json
+import zipfile
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as parquet
+from app.core.config import get_settings
 
 
 class DatasetParseError(Exception):
@@ -40,6 +42,11 @@ class DatasetLoaderService:
 
     def load(self, file_bytes: bytes, file_type: str) -> LoadedDataset:
         try:
+            if file_type == "xlsx":
+                with zipfile.ZipFile(io.BytesIO(file_bytes)) as archive:
+                    entries = archive.infolist()
+                    if len(entries) > 10000 or sum(item.file_size for item in entries) > get_settings().max_expanded_file_mb * 1024 * 1024:
+                        raise UnsupportedDatasetStructureError
             if file_type == "csv":
                 loaded = self._load_csv(file_bytes)
             elif file_type == "xlsx":
@@ -130,6 +137,8 @@ class DatasetLoaderService:
         parquet_file = parquet.ParquetFile(buffer)
         if parquet_file.metadata.num_rows > self.max_rows:
             raise DatasetRowLimitError
+        if sum(parquet_file.metadata.row_group(i).total_byte_size for i in range(parquet_file.metadata.num_row_groups)) > get_settings().max_expanded_file_mb * 1024 * 1024:
+            raise UnsupportedDatasetStructureError
         column_names = [str(name) for name in parquet_file.schema.names]
         buffer.seek(0)
         dataframe = pd.read_parquet(buffer, engine="pyarrow")
@@ -141,7 +150,7 @@ class DatasetLoaderService:
 
     @staticmethod
     def _enforce_flat_structure(dataframe: pd.DataFrame) -> None:
-        if dataframe.shape[1] == 0:
+        if dataframe.shape[1] == 0 or dataframe.shape[1] > get_settings().max_dataset_columns:
             raise UnsupportedDatasetStructureError
         nested_types = (dict, list, tuple, set, np.ndarray)
         for column_index in range(dataframe.shape[1]):

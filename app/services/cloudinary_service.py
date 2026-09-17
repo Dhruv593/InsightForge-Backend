@@ -54,7 +54,7 @@ class CloudinaryService:
                 file_object,
                 public_id=public_id,
                 resource_type="raw",
-                type="upload",
+                type="authenticated",
                 overwrite=False,
                 unique_filename=False,
                 use_filename=False,
@@ -83,13 +83,14 @@ class CloudinaryService:
         resource_type: str,
         user_id: UUID,
         dataset_id: UUID,
+        delivery_type: str = "authenticated",
     ) -> None:
         try:
             response: dict[str, Any] = await asyncio.to_thread(
                 cloudinary.uploader.destroy,
                 public_id,
                 resource_type=resource_type,
-                type="upload",
+                type=delivery_type,
                 invalidate=True,
             )
             if response.get("result") not in {"ok", "not found"}:

@@ -115,6 +115,7 @@ class DatasetService:
                 resource_type=dataset.cloudinary_resource_type,
                 user_id=user_id,
                 dataset_id=owned_dataset_id,
+                delivery_type="authenticated" if "/raw/authenticated/" in dataset.cloudinary_url else "upload",
             )
         except CloudinaryDeleteError as exc:
             raise CloudinaryDeleteFailedError from exc

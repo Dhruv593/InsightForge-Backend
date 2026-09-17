@@ -5,7 +5,7 @@ from app.graph.topology import CONTRACTS, EDGES, ROUTES
 
 
 async def read_only(state: AnalysisState):
-    raise RuntimeError("Topology viewer only. Run analyses through authenticated InsightForge and inspect their LangSmith traces.")
+    raise RuntimeError("Topology viewer only. Run analyses through authenticated Tatparya and inspect their LangSmith traces.")
 
 
 def build_graph():

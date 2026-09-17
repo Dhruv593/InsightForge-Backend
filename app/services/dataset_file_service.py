@@ -1,4 +1,6 @@
 import logging
+import time
+import cloudinary.utils
 from urllib.parse import urlparse
 
 import httpx
@@ -29,6 +31,8 @@ class DatasetFileService:
         if (
             parsed_url.scheme != "https"
             or parsed_url.hostname not in ALLOWED_DATASET_ASSET_HOSTS
+            or parsed_url.username is not None
+            or parsed_url.port not in {None, 443}
             or not path_parts
             or path_parts[0] != self.cloudinary_cloud_name
         ):
@@ -39,6 +43,21 @@ class DatasetFileService:
             )
             raise DatasetFileDownloadError
 
+        download_url = dataset.cloudinary_url
+        if "/raw/authenticated/" in parsed_url.path:
+            expected_id = f"insightforge/datasets/{dataset.user_id}/{dataset.id}.{dataset.file_type}"
+            if dataset.cloudinary_public_id != expected_id:
+                raise DatasetFileDownloadError
+            settings = get_settings()
+            download_url = cloudinary.utils.private_download_url(
+                expected_id, None, resource_type="raw", type="authenticated",
+                expires_at=int(time.time()) + 60,
+                cloud_name=settings.cloudinary_cloud_name,
+                api_key=settings.cloudinary_api_key.get_secret_value(),
+                api_secret=settings.cloudinary_api_secret.get_secret_value(),
+                secure=True,
+            )
+
         timeout = httpx.Timeout(DOWNLOAD_TIMEOUT_SECONDS, connect=10.0)
         downloaded = bytearray()
         try:
@@ -46,7 +65,7 @@ class DatasetFileService:
                 timeout=timeout,
                 follow_redirects=False,
             ) as client:
-                async with client.stream("GET", dataset.cloudinary_url) as response:
+                async with client.stream("GET", download_url) as response:
                     response.raise_for_status()
                     content_length = response.headers.get("content-length")
                     if (

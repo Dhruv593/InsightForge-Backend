@@ -1,1 +1,1 @@
-"""InsightForge API tests."""
+"""Tatparya API tests."""

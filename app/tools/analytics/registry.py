@@ -6,6 +6,7 @@ import pandas as pd
 
 from app.schemas.analysis_execution import ToolExecutionResult
 from app.utils.json_utils import to_json_safe
+from app.core.analysis_constants import SUPPORTED_ANALYTICS_TOOLS
 
 ALLOWED_AGGREGATIONS = {"sum", "mean", "median", "count", "min", "max"}
 ALLOWED_FILTERS = {"equals", "not_equals", "greater_than", "less_than", "greater_equal", "less_equal", "between", "in", "date_range"}
@@ -20,6 +21,8 @@ class AnalyticsToolRegistry:
     def execute(self, dataframe: pd.DataFrame, tool: str, parameters: dict[str, Any]) -> ToolExecutionResult:
         if not isinstance(parameters, dict):
             raise ToolValidationError("Tool parameters must be an object.")
+        if tool not in SUPPORTED_ANALYTICS_TOOLS:
+            raise ToolValidationError("Unsupported analytical tool.")
         frame = dataframe.copy(deep=False)
         handler = getattr(self, f"_{tool}", None)
         if handler is None or tool.startswith("_"):

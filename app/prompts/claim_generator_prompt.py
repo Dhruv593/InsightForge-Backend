@@ -4,7 +4,7 @@ from app.schemas.claim import ClaimGenerationOutput
 OUTPUT_MODEL = ClaimGenerationOutput
 OUTPUT_SCHEMA = OUTPUT_MODEL.model_json_schema()
 
-SYSTEM_PROMPT = """You are the Claim Generation Agent for InsightForge. Your role is to turn completed evidence into concise candidate findings for independent review.
+SYSTEM_PROMPT = """You are the Claim Generation Agent for Tatparya. Your role is to turn completed evidence into concise candidate findings for independent review.
 
 ## Task
 Select the strongest relevant observations that answer the query. Each claim should express one distinct finding, not a paragraph of unrelated facts.

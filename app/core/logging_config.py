@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
@@ -11,7 +12,26 @@ from app.core.config import Settings
 STANDARD_LOG_FIELDS = set(logging.makeLogRecord({}).__dict__)
 
 
-class JsonLogFormatter(logging.Formatter):
+def _redact(value: str) -> str:
+    value = re.sub(r"https?://[^\s\"']+", "[URL redacted]", value)
+    value = re.sub(r"Bearer\s+[^\s\"']+", "Bearer [redacted]", value, flags=re.I)
+    return re.sub(
+        r"(?i)(api[_-]?key|token|secret|password)(\s*[=:]\s*)[^\s,;\"']+",
+        r"\1\2[redacted]",
+        value,
+    )
+
+
+class SafeFormatter(logging.Formatter):
+    def formatException(self, exc_info):
+        # SQL/provider exceptions can embed credentials, prompts and row values.
+        return f"{exc_info[0].__name__}: exception details withheld"
+
+    def format(self, record):
+        return _redact(super().format(record))
+
+
+class JsonLogFormatter(SafeFormatter):
     """Write searchable JSON Lines without serializing request or response bodies."""
 
     def format(self, record: logging.LogRecord) -> str:
@@ -19,7 +39,7 @@ class JsonLogFormatter(logging.Formatter):
             "timestamp": self.formatTime(record, "%Y-%m-%dT%H:%M:%S%z"),
             "level": record.levelname,
             "logger": record.name,
-            "message": record.getMessage(),
+            "message": _redact(record.getMessage()),
         }
         for key, value in record.__dict__.items():
             if key not in STANDARD_LOG_FIELDS and not key.startswith("_"):
@@ -30,9 +50,19 @@ class JsonLogFormatter(logging.Formatter):
 
     @staticmethod
     def _json_value(value: Any) -> Any:
-        if value is None or isinstance(value, (str, int, float, bool, list, dict)):
+        if isinstance(value, str):
+            return _redact(value)
+        if isinstance(value, list):
+            return [JsonLogFormatter._json_value(item) for item in value]
+        if isinstance(value, dict):
+            return {
+                key: "[redacted]" if re.search(r"(?i)(api[_-]?key|token|secret|password)", str(key))
+                else JsonLogFormatter._json_value(item)
+                for key, item in value.items()
+            }
+        if value is None or isinstance(value, (int, float, bool)):
             return value
-        return str(value)
+        return _redact(str(value))
 
 
 def setup_logging(settings: Settings) -> Path:
@@ -51,7 +81,7 @@ def setup_logging(settings: Settings) -> Path:
     console = logging.StreamHandler()
     console._insightforge_handler = True  # type: ignore[attr-defined]
     console.setLevel(settings.console_log_level)
-    console.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s", "%H:%M:%S"))
+    console.setFormatter(SafeFormatter("%(asctime)s %(levelname)s %(name)s: %(message)s", "%H:%M:%S"))
 
     application_file = _rotating_handler(log_dir / "insightforge.jsonl", settings)
     if application_file is not None:
@@ -75,6 +105,9 @@ def setup_logging(settings: Settings) -> Path:
     logging.getLogger("sqlalchemy.engine").setLevel(settings.sql_log_level)
     logging.getLogger("sqlalchemy.pool").setLevel(settings.sql_log_level)
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    # HTTP clients include signed download query strings in INFO request logs.
+    for name in ("httpx", "httpcore", "google", "groq", "cloudinary"):
+        logging.getLogger(name).setLevel(logging.WARNING)
     if application_file is None or error_file is None:
         root.warning("File logging is unavailable; check write permission and file locks for %s", log_dir)
     return log_dir

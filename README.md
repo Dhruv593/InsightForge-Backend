@@ -1,6 +1,6 @@
-# InsightForge API
+# Tatparya API
 
-FastAPI backend for the InsightForge autonomous multi-agent data analyst application. Stage 7 adds a provider-consistent Supervisor, Profile Interpreter, and Planner pipeline that produces a validated analysis plan without executing calculations.
+FastAPI backend for the Tatparya autonomous multi-agent data analyst application. Stage 7 adds a provider-consistent Supervisor, Profile Interpreter, and Planner pipeline that produces a validated analysis plan without executing calculations.
 
 ## Requirements
 

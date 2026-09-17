@@ -1,1 +1,1 @@
-"""InsightForge API application package."""
+"""Tatparya API application package."""

@@ -2,14 +2,14 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, SecretStr, field_validator
+from pydantic import Field, PostgresDsn, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables or a local .env file."""
 
-    app_name: str = "InsightForge API"
+    app_name: str = "Tatparya API"
     app_env: str = "development"
     debug: bool = False
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
@@ -50,6 +50,19 @@ class Settings(BaseSettings):
     groq_api_key: SecretStr | None = None
     groq_model: str | None = None
     llm_request_timeout_seconds: int = Field(default=60, gt=0, le=300)
+    max_expanded_file_mb: int = Field(default=100, gt=0, le=512)
+    max_dataset_columns: int = Field(default=200, gt=0, le=1000)
+
+    @model_validator(mode="after")
+    def production_safety(self):
+        if self.app_env.lower() in {"production", "prod"}:
+            if self.debug or self.sql_echo or self.langsmith_detail_mode:
+                raise ValueError("Production requires DEBUG, SQL_ECHO and LANGSMITH_DETAIL_MODE=false.")
+            if not self.frontend_url.startswith("https://"):
+                raise ValueError("Production FRONTEND_URL must use HTTPS.")
+            if "change" in self.jwt_secret_key.get_secret_value().lower():
+                raise ValueError("Replace the example JWT secret before deployment.")
+        return self
 
     @field_validator("database_url", mode="before")
     @classmethod

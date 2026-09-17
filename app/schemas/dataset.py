@@ -13,7 +13,6 @@ class DatasetResponse(BaseModel):
     file_type: str
     mime_type: str
     file_size: int
-    cloudinary_url: str
     cloudinary_resource_type: str
     upload_status: str
     created_at: datetime

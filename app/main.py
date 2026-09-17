@@ -16,6 +16,7 @@ from app.api.health import router as health_router
 from app.api.account import router as account_router
 from app.api.monitoring import router as monitoring_router
 from app.core.config import get_settings
+from app.core.http_security import SecurityMiddleware
 from app.core.logging_config import setup_logging
 from app.core.exceptions import (
     AppError,
@@ -44,10 +45,14 @@ def create_application() -> FastAPI:
     log_dir = setup_logging(settings)
     application = FastAPI(
         title=settings.app_name,
-        debug=settings.debug,
+        debug=settings.debug if settings.app_env.lower() == "development" else False,
+        docs_url="/docs" if settings.app_env.lower() == "development" else None,
+        redoc_url=None,
+        openapi_url="/openapi.json" if settings.app_env.lower() == "development" else None,
         lifespan=application_lifespan,
     )
 
+    application.add_middleware(SecurityMiddleware, settings=settings)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[settings.frontend_url],
@@ -58,7 +63,7 @@ def create_application() -> FastAPI:
 
     @application.middleware("http")
     async def log_request(request, call_next):
-        request_id = request.headers.get("x-request-id") or str(uuid4())
+        request_id = str(uuid4())
         started = perf_counter()
         try:
             response = await call_next(request)

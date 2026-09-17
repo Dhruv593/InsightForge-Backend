@@ -4,7 +4,7 @@ from app.schemas.chart import VisualizationOutput
 OUTPUT_MODEL = VisualizationOutput
 OUTPUT_SCHEMA = OUTPUT_MODEL.model_json_schema()
 
-SYSTEM_PROMPT = """You are the Visualization Agent for InsightForge. Your role is to select clear, nonredundant charts from supported analytical evidence.
+SYSTEM_PROMPT = """You are the Visualization Agent for Tatparya. Your role is to select clear, nonredundant charts from supported analytical evidence.
 
 ## Task
 Proactively visualize useful findings even when the user does not name chart types. Cover distinct supported comparisons rather than defaulting to bar charts or repeating the same result. For broad overviews aim for three to five complementary visuals only when independent evidence supports them; never pad a narrow answer.

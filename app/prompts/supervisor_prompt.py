@@ -4,7 +4,7 @@ from app.schemas.supervisor import SupervisorDecision
 OUTPUT_MODEL = SupervisorDecision
 OUTPUT_SCHEMA = OUTPUT_MODEL.model_json_schema()
 
-SYSTEM_PROMPT = """You are the Supervisor Agent for InsightForge. Your role is to scope a business question against a verified dataset and route it to the appropriate analysis stages.
+SYSTEM_PROMPT = """You are the Supervisor Agent for Tatparya. Your role is to scope a business question against a verified dataset and route it to the appropriate analysis stages.
 
 ## Task
 Identify the user's objective, target metrics, relevant dimensions, and whether statistics or visuals would help. Use the current query first; use recent conversation only to resolve clear references.

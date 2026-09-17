@@ -69,7 +69,7 @@ class User(Base):
     def is_admin(self) -> bool:
         from app.core.config import get_settings
         allowed = {item.strip().lower() for item in get_settings().admin_emails.split(",") if item.strip()}
-        return self.email.lower() in allowed
+        return self.is_active and self.is_email_verified and self.email.lower() in allowed
 
     @property
     def password_configured(self) -> bool:
