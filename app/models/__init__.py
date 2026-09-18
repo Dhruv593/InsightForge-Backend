@@ -18,6 +18,7 @@ from app.models.message import Message
 from app.models.user import User
 from app.models.user_session import UserSession
 from app.models.account_token import AccountToken
+from app.models.content_entry import ContentEntry
 
 __all__ = [
     "AnalysisRun",
@@ -40,4 +41,5 @@ __all__ = [
     "User",
     "UserSession",
     "AccountToken",
+    "ContentEntry",
 ]

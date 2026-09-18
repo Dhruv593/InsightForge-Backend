@@ -49,11 +49,13 @@ class SecurityMiddleware:
                 ):
                     if name not in existing:
                         response_headers.append((name, value))
+                if self.settings.app_env.lower() in {"production", "prod"} and b"strict-transport-security" not in existing:
+                    response_headers.append((b"strict-transport-security", b"max-age=31536000; includeSubDomains"))
             await send(message)
 
-        async def reject(code, text, status):
+        async def reject(code, text, status, retry_after=60):
             response = JSONResponse({"success": False, "error": {"code": code, "message": text}}, status_code=status,
-                                    headers={"Retry-After": "60"} if status == 429 else None)
+                                    headers={"Retry-After": str(retry_after)} if status == 429 else None)
             await response(scope, receive, secure_send)
 
         if method not in {"GET", "HEAD", "OPTIONS"}:
@@ -63,6 +65,9 @@ class SecurityMiddleware:
             if path.startswith(prefix + "/auth") or path.startswith(prefix + "/account"):
                 if not self.allowed(("auth", client), 30):
                     return await reject("RATE_LIMITED", "Too many account requests. Please wait a minute.", 429)
+            if path in {prefix + "/auth/register", prefix + "/account/forgot-password"}:
+                if not self.allowed(("account_creation", client), 10, window=600):
+                    return await reject("RATE_LIMITED", "Too many account requests. Please try again later.", 429, retry_after=600)
             expensive = path.endswith(("/query", "/retry", "/profile", "/execute")) or path == prefix + "/datasets"
             if expensive:
                 identity = client
@@ -75,8 +80,14 @@ class SecurityMiddleware:
                 if not self.allowed(("analysis", identity), 10):
                     return await reject("RATE_LIMITED", "Too many uploads or analyses. Please wait a minute.", 429)
 
-        maximum = (self.settings.max_upload_size_mb * 1024 * 1024 + 1024 * 1024
-                   if method == "POST" and path == prefix + "/datasets" else 64 * 1024)
+        if method == "POST" and path == prefix + "/datasets":
+            maximum = self.settings.max_upload_size_mb * 1024 * 1024 + 1024 * 1024
+        elif method == "POST" and path == prefix + "/admin/site-content/images":
+            maximum = 6 * 1024 * 1024
+        elif path.startswith(prefix + "/admin/blogs") and method in {"POST", "PUT"}:
+            maximum = 1024 * 1024
+        else:
+            maximum = 64 * 1024
         try:
             length = int(headers.get(b"content-length", b"0"))
             if length < 0 or length > maximum:
