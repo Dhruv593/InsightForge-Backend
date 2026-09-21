@@ -22,6 +22,7 @@ from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.dataset_profile_repository import DatasetProfileRepository
 from app.services.conversation_service import ConversationService
 from app.services.message_service import MessageService
+from app.services.llm_settings_service import LLMSettingsService
 
 logger = logging.getLogger(__name__)
 
@@ -34,13 +35,15 @@ class AnalysisRunService:
         self.conversations = ConversationRepository(session)
         self.conversation_service = ConversationService(session)
         self.message_service = MessageService(session)
+        self.llm_settings = LLMSettingsService(session)
 
     async def create_pending_run(
-        self, conversation_id: UUID, query: str, llm_provider: str, user: User, *, force: bool = False
+        self, conversation_id: UUID, query: str, llm_provider: str | None, user: User, *, force: bool = False
     ) -> tuple[Message, AnalysisRun]:
         conversation = await self.conversation_service.get_conversation(conversation_id, user)
         normalized_query = self._normalize_query(query)
-        provider = self._normalize_provider(llm_provider)
+        # Legacy clients may still submit a provider; only the saved admin setting controls it.
+        provider = self._normalize_provider(await self.llm_settings.selected_provider())
         profile = await self.profiles.get_by_dataset_id(conversation.dataset_id)
         if profile is None or profile.profile_status != DatasetProfileStatus.COMPLETED.value:
             raise DatasetNotProfiledError
@@ -87,7 +90,7 @@ class AnalysisRunService:
         return await self.create_pending_run(
             original.conversation_id,
             original.query,
-            provider or original.llm_provider,
+            None,
             user,
             force=True,
         )

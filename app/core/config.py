@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     langsmith_project_url: str = ""
     google_client_id: str = ""
     langsmith_enabled: bool = False
+    default_llm_provider: Literal["gemini", "groq"] = "gemini"
     langsmith_detail_mode: bool = False
     langsmith_api_key: SecretStr | None = None
     langsmith_endpoint: str = "https://api.smith.langchain.com"

@@ -209,12 +209,11 @@ class AnalysisExecutionService:
             return {"chart_specs": charts}
 
         async def report_executor(state: AnalysisState) -> dict[str, object]:
-            report = await self.stage9.create_fallback_report(
+            report = await self._generate_report(
                 run=run,
-                claims=state.get("accepted_claims") or [],
-                evidence=state.get("evidence") or [],
-                validations=state.get("statistical_validations") or [],
+                state=state,
                 quality_warnings=[*(profile_context.get("quality_issues") or []), *[{"message": note} for note in self.task_execution.warnings]],
+                run_agent=run_agent,
             )
             return {"final_report": report}
 
@@ -293,6 +292,43 @@ class AnalysisExecutionService:
             await self._fail_run(run_id, "LLM_EXECUTION_FAILED", safe_message)
             logger.exception("Analysis execution failed analysis_run_id=%s provider=%s error_type=%s", run_id, run_provider, type(exc).__name__)
             raise LLMRequestError("LLM_EXECUTION_FAILED", safe_message) from exc
+
+    async def _generate_report(
+        self,
+        *,
+        run: AnalysisRun,
+        state: AnalysisState,
+        quality_warnings: list[dict[str, Any]],
+        run_agent: Callable[..., Awaitable[LLMResult]],
+    ) -> dict[str, Any]:
+        inputs = {
+            "run": run,
+            "claims": state.get("accepted_claims") or [],
+            "evidence": state.get("evidence") or [],
+            "validations": state.get("statistical_validations") or [],
+            "quality_warnings": quality_warnings,
+        }
+        if inputs["claims"]:
+            try:
+                return await self.stage9.create_report(
+                    **inputs,
+                    charts=state.get("chart_specs") or [],
+                    run_agent=run_agent,
+                )
+            except (StageAgentFailure, Stage9Failure) as exc:
+                # Persistence failures belong to global recovery; do not retry a write.
+                if isinstance(exc, Stage9Failure) and exc.code != "REPORT_VALIDATION_FAILED":
+                    raise
+                logger.warning(
+                    "Using evidence-based report fallback analysis_run_id=%s provider=%s error_code=%s",
+                    run.id, run.llm_provider, exc.code,
+                    extra={"analysis_run_id": str(run.id), "provider": run.llm_provider, "error_code": exc.code},
+                )
+                await trace_event("report_fallback", error_code=exc.code, outcome="completed_with_fallback")
+        else:
+            # No reviewed findings means there is no grounded input for the report agent.
+            await trace_event("report_without_accepted_claims", outcome="partial")
+        return await self.stage9.create_fallback_report(**inputs)
 
     async def list_agent_runs(self, analysis_run_id: UUID, user: User) -> list[AgentRun]:
         run = await self.runs.get_by_id_for_user(analysis_run_id, user.id)

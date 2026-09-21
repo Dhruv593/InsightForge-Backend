@@ -393,10 +393,20 @@ class Stage9Service:
         except ValidationError as exc:
             raise Stage9Failure("REPORT_VALIDATION_FAILED") from exc
         claim_map = {item["claim_code"]: item for item in claims}
+        evidence_map = {item["evidence_code"]: item for item in relevant_evidence}
+        if claims and not report.key_findings:
+            raise Stage9Failure("REPORT_VALIDATION_FAILED", "The report omitted the accepted findings.")
         for finding in report.key_findings:
-            if finding.claim_code not in accepted_codes or any(code not in evidence_codes or code not in claim_map[finding.claim_code]["evidence_codes"] for code in finding.evidence_codes):
+            if finding.claim_code not in accepted_codes or any(code not in evidence_map or code not in claim_map[finding.claim_code]["evidence_codes"] for code in finding.evidence_codes):
                 raise Stage9Failure("REPORT_VALIDATION_FAILED")
-        grounding = {"claims": claims, "evidence": relevant_evidence, "statistics": relevant_stats, "quality": quality_warnings, "charts": charts}
+            try:
+                AnalystAgent._validate_numeric_grounding(finding.finding, {
+                    "evidence": [evidence_map[code] for code in finding.evidence_codes],
+                    "statistics": [item for item in relevant_stats if item.get("evidence_code") in finding.evidence_codes],
+                })
+            except NumericGroundingError as exc:
+                raise Stage9Failure("REPORT_VALIDATION_FAILED", "A finding introduced a value outside its linked evidence.") from exc
+        grounding = {"evidence": relevant_evidence, "statistics": relevant_stats, "quality": quality_warnings}
         texts = [report.executive_summary, *[item.finding for item in report.key_findings], *report.statistical_findings, *report.recommendations]
         try:
             for text in texts:

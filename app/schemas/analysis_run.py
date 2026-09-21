@@ -1,19 +1,19 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.message import MessageResponse
 
 
 class AnalysisRunCreate(BaseModel):
     query: str
-    llm_provider: str
+    llm_provider: str | None = Field(default=None, description="Deprecated compatibility field; the admin-selected provider is always used.")
     force: bool = False
 
 
 class AnalysisRunRetry(BaseModel):
-    llm_provider: str | None = None
+    llm_provider: str | None = Field(default=None, description="Deprecated compatibility field; retries use the current admin-selected provider.")
 
 
 class AnalysisRunResponse(BaseModel):

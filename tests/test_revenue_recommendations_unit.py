@@ -12,3 +12,14 @@ class RevenueRecommendationsTests(unittest.TestCase):
     def test_no_evidence_and_invalid_values(self):
         self.assertEqual(revenue_recommendations([]), [])
         self.assertEqual(revenue_recommendations([{"method": "correlation", "result": {"r": 0.99}}]), [])
+
+    def test_fallback_formats_periods_at_the_calculated_granularity(self):
+        for frequency, label in [("monthly", "October 2025"), ("quarterly", "Q4 2025"), ("yearly", "2025"), ("daily", "31 October 2025")]:
+            with self.subTest(frequency=frequency):
+                result = revenue_recommendations([{
+                    "method": "time_series_aggregate",
+                    "operation": {"metric": "Net_Revenue", "date_column": "Order_Date", "frequency": frequency},
+                    "result": [{"Order_Date": "2025-10-31T00:00:00", "value": 200}, {"Order_Date": "2025-01-31T00:00:00", "value": 100}],
+                }])
+                self.assertIn(f"({label})", result[0])
+                self.assertNotIn("T00:00:00", result[0])

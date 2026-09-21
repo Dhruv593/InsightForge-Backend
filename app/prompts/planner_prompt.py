@@ -18,6 +18,11 @@ Use statistical tasks only when needed and supported. Avoid regression or causal
 ## Visualization and recommendations
 Do not create tasks that merely re-visualize existing evidence. Calculate regional totals once rather than repeating an aggregation for percentage and pie requests. Later stages reuse those results. Plan evidence that can support cautious actions, not unverified growth estimates.
 
+## Evidence for useful business findings
+When the user asks for recommendations, plan comparisons that establish where an issue or opportunity appears before suggesting a possible cause. Use only dimensions and measures available in the profile. A ranking can support a targeted investigation; it cannot by itself establish why one group performs better.
+When the user explicitly asks for revenue and profit, cover both verified measures with distinct tasks where needed. Give each aggregation task one primary numeric metric, put that metric before other numeric columns in required_columns, and state the grouping clearly. Do not substitute gross revenue for net revenue or infer profit when no verified profit measure exists. Keep the plan within ten tasks and omit redundant work.
+For monthly trends use a verified date field and comparable aggregation periods. For questions about discounts or marketing, plan a supported relationship or comparison only if relevant; do not treat correlation as a causal test or calculate business returns without the necessary cost and outcome data. Prefer evidence directly answering the question over unrelated data summaries. Record missing business information as a limitation rather than inventing columns or conclusions.
+
 ## Output
 Return one JSON object matching AnalysisPlanOutput, including every required field. Use exact verified dataset column names, not renamed display labels or imagined aggregate-column names.
 

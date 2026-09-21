@@ -1,5 +1,20 @@
 """Conservative next-step suggestions derived from completed evidence, not promises."""
 import math
+from datetime import datetime
+
+
+def _period_label(value, frequency):
+    try:
+        date = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return str(value)
+    if frequency == "monthly":
+        return date.strftime("%B %Y")
+    if frequency == "quarterly":
+        return f"Q{(date.month - 1) // 3 + 1} {date.year}"
+    if frequency == "yearly":
+        return str(date.year)
+    return f"{date.day} {date.strftime('%B %Y')}"
 
 
 def revenue_recommendations(evidence):
@@ -31,7 +46,8 @@ def revenue_recommendations(evidence):
         if high[1] == low[1]:
             continue
         if method == "time_series_aggregate":
-            suggestions.append(f"Review orders, pricing and campaigns in the strongest period ({high[0]}) before assuming that performance will repeat.")
+            period = _period_label(high[0], operation.get("frequency"))
+            suggestions.append(f"Review orders, pricing and campaigns in the strongest period ({period}) before assuming that performance will repeat.")
         else:
             suggestions.append(f"Compare order volumes, pricing and customer mix between {high[0]} and {low[0]} in the {dimension.replace('_', ' ')} breakdown. Test a small improvement before committing more budget.")
     return list(dict.fromkeys(suggestions))[:4]

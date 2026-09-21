@@ -16,6 +16,7 @@ from app.api.health import router as health_router
 from app.api.account import router as account_router
 from app.api.monitoring import router as monitoring_router
 from app.api.site_content import router as site_content_router
+from app.api.llm_settings import router as llm_settings_router
 from app.core.config import get_settings
 from app.core.http_security import SecurityMiddleware
 from app.core.logging_config import setup_logging
@@ -107,6 +108,7 @@ def create_application() -> FastAPI:
     application.include_router(account_router, prefix=settings.api_v1_prefix)
     application.include_router(monitoring_router, prefix=settings.api_v1_prefix)
     application.include_router(site_content_router, prefix=settings.api_v1_prefix)
+    application.include_router(llm_settings_router, prefix=settings.api_v1_prefix)
 
     logger.info("Application logging configured log_dir=%s", log_dir)
 

@@ -12,6 +12,7 @@ from app.core.exceptions import (
     MessageEmptyError,
     QueryTooLongError,
 )
+from app.core.config import get_settings
 from app.models import AnalysisRun, Conversation, Dataset, DatasetProfile, Message
 from app.models.dataset_profile import DatasetProfileStatus
 from app.models.user import User
@@ -169,7 +170,7 @@ async def test_query_requires_completed_profile(
     assert response.json()["error"]["code"] == "DATASET_NOT_PROFILED"
 
 
-@pytest.mark.parametrize("provider", ["gemini", "groq", "GEMINI", " Groq "])
+@pytest.mark.parametrize("provider", ["gemini", "groq", "GEMINI", " Groq ", "openai"])
 async def test_query_creates_linked_message_and_pending_run(
     client: httpx.AsyncClient,
     test_session_factory: async_sessionmaker[AsyncSession],
@@ -186,7 +187,7 @@ async def test_query_creates_linked_message_and_pending_run(
     assert response.status_code == 201
     body = response.json()
     assert body["analysis_run"]["status"] == "pending"
-    assert body["analysis_run"]["llm_provider"] == provider.strip().lower()
+    assert body["analysis_run"]["llm_provider"] == get_settings().default_llm_provider
     assert body["message"]["role"] == "user"
     assert body["message"]["message_type"] == "text"
     assert body["message"]["analysis_run_id"] == body["analysis_run"]["id"]
@@ -198,7 +199,6 @@ async def test_query_creates_linked_message_and_pending_run(
         ({"query": "", "llm_provider": "gemini"}, "MESSAGE_EMPTY"),
         ({"query": "   ", "llm_provider": "groq"}, "MESSAGE_EMPTY"),
         ({"query": "x" * 5001, "llm_provider": "gemini"}, "QUERY_TOO_LONG"),
-        ({"query": "question", "llm_provider": "openai"}, "INVALID_LLM_PROVIDER"),
     ],
 )
 async def test_query_validation(
@@ -292,6 +292,7 @@ async def test_query_rolls_back_when_message_creation_fails() -> None:
         profile_status=DatasetProfileStatus.COMPLETED.value,
     )
     service.conversation_service.get_conversation = AsyncMock(return_value=conversation)
+    service.llm_settings.selected_provider = AsyncMock(return_value="gemini")
     service.profiles.get_by_dataset_id = AsyncMock(return_value=profile)
     service.runs.find_duplicate = AsyncMock(return_value=None)
     service.runs.create = AsyncMock(side_effect=lambda run: run)

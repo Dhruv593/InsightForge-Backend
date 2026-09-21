@@ -19,6 +19,7 @@ from app.models.user import User
 from app.models.user_session import UserSession
 from app.models.account_token import AccountToken
 from app.models.content_entry import ContentEntry
+from app.models.llm_settings import LLMSettings
 
 __all__ = [
     "AnalysisRun",
@@ -42,4 +43,5 @@ __all__ = [
     "UserSession",
     "AccountToken",
     "ContentEntry",
+    "LLMSettings",
 ]
