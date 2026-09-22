@@ -21,7 +21,7 @@ class AgentRun(Base):
             name="ck_agent_runs_status",
         ),
         CheckConstraint(
-            "provider IN ('gemini', 'groq')",
+            "provider IN ('gemini', 'groq', 'openai', 'anthropic')",
             name="ck_agent_runs_provider",
         ),
         Index("ix_agent_runs_analysis_run_id", "analysis_run_id"),

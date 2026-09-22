@@ -13,7 +13,7 @@ class LLMSettings(Base):
     __tablename__ = "llm_settings"
     __table_args__ = (
         CheckConstraint("id = 1", name="ck_llm_settings_singleton"),
-        CheckConstraint("provider IN ('gemini', 'groq')", name="ck_llm_settings_provider"),
+        CheckConstraint("provider IN ('gemini', 'groq', 'openai', 'anthropic')", name="ck_llm_settings_provider"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)

@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 class AnalysisRun(Base):
     __tablename__ = "analysis_runs"
     __table_args__ = (
-        CheckConstraint("llm_provider IN ('gemini', 'groq')", name="ck_analysis_runs_provider"),
+        CheckConstraint("llm_provider IN ('gemini', 'groq', 'openai', 'anthropic')", name="ck_analysis_runs_provider"),
         CheckConstraint(
             "status IN ('pending', 'running', 'completed', 'failed', 'cancelled')",
             name="ck_analysis_runs_status",

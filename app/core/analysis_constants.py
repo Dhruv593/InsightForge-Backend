@@ -21,6 +21,8 @@ class MessageType(str, Enum):
 class LLMProvider(str, Enum):
     GEMINI = "gemini"
     GROQ = "groq"
+    OPENAI = "openai"
+    ANTHROPIC = "anthropic"
 
 
 class AnalysisRunStatus(str, Enum):

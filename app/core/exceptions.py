@@ -245,7 +245,7 @@ class InvalidLLMProviderError(AppError):
     def __init__(self) -> None:
         super().__init__(
             code="INVALID_LLM_PROVIDER",
-            message="LLM provider must be either gemini or groq.",
+            message="The selected LLM provider is not supported.",
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         )
 

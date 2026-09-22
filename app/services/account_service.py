@@ -36,6 +36,13 @@ class AccountService:
         await self.session.refresh(user)
         return user
 
+    async def complete_onboarding(self, user: User) -> User:
+        if user.onboarding_completed_at is None:
+            user.onboarding_completed_at = datetime.now(timezone.utc)
+            await self.session.commit()
+            await self.session.refresh(user)
+        return user
+
     async def change_password(self, user: User, current_password: str | None, new_password: str) -> None:
         if user.password_hash and (not current_password or not verify_password(current_password, user.password_hash)):
             raise InvalidCredentialsError

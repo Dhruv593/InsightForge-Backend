@@ -45,6 +45,11 @@ async def update_profile(payload: ProfileUpdateRequest, user: CurrentUser, accou
     return UserResponse.model_validate(await account.update_profile(user, payload.name))
 
 
+@router.post("/onboarding/complete", response_model=UserResponse)
+async def complete_onboarding(user: CurrentUser, account: Annotated[AccountService, Depends(service)]) -> UserResponse:
+    return UserResponse.model_validate(await account.complete_onboarding(user))
+
+
 @router.post("/password", response_model=LogoutResponse)
 async def change_password(payload: PasswordChangeRequest, user: CurrentUser, account: Annotated[AccountService, Depends(service)]) -> LogoutResponse:
     await account.change_password(user, payload.current_password, payload.new_password)

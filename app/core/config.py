@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     langsmith_project_url: str = ""
     google_client_id: str = ""
     langsmith_enabled: bool = False
-    default_llm_provider: Literal["gemini", "groq"] = "gemini"
+    default_llm_provider: Literal["gemini", "groq", "openai", "anthropic"] = "gemini"
     langsmith_detail_mode: bool = False
     langsmith_api_key: SecretStr | None = None
     langsmith_endpoint: str = "https://api.smith.langchain.com"
@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     gemini_model: str | None = None
     groq_api_key: SecretStr | None = None
     groq_model: str | None = None
+    openai_api_key: SecretStr | None = None
+    openai_model: str | None = None
+    anthropic_api_key: SecretStr | None = None
+    anthropic_model: str | None = None
+    anthropic_max_tokens: int = Field(default=8192, gt=0, le=64_000)
     llm_request_timeout_seconds: int = Field(default=60, gt=0, le=300)
     max_expanded_file_mb: int = Field(default=100, gt=0, le=512)
     max_dataset_columns: int = Field(default=200, gt=0, le=1000)

@@ -19,7 +19,12 @@ class LLMSettingsService:
 
     def options(self) -> list[LLMProviderOption]:
         options = []
-        for provider, label in (("gemini", "Google Gemini"), ("groq", "Groq")):
+        for provider, label in (
+            ("gemini", "Google Gemini"),
+            ("groq", "Groq"),
+            ("openai", "OpenAI (ChatGPT)"),
+            ("anthropic", "Anthropic Claude"),
+        ):
             key = getattr(self.settings, f"{provider}_api_key")
             model = (getattr(self.settings, f"{provider}_model") or "").strip()
             options.append(LLMProviderOption(

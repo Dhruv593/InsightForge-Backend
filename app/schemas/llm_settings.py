@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-ProviderName = Literal["gemini", "groq"]
+ProviderName = Literal["gemini", "groq", "openai", "anthropic"]
 
 
 class LLMSettingsUpdate(BaseModel):

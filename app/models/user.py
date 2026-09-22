@@ -35,6 +35,7 @@ class User(Base):
     )
     is_email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     token_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    onboarding_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

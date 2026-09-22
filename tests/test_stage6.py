@@ -31,7 +31,9 @@ class StubProvider(BaseLLMProvider):
 def _settings() -> SimpleNamespace:
     return SimpleNamespace(
         gemini_api_key=None, gemini_model=None, groq_api_key=None,
-        groq_model=None, llm_request_timeout_seconds=1,
+        groq_model=None, openai_api_key=None, openai_model=None,
+        anthropic_api_key=None, anthropic_model=None, anthropic_max_tokens=8192,
+        llm_request_timeout_seconds=1,
     )
 
 

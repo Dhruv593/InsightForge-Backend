@@ -11,6 +11,8 @@ from app.schemas.llm import LLMMessage, LLMResult
 from app.services.llm.base import BaseLLMProvider, LLMProviderError
 from app.services.llm.gemini_provider import GeminiProvider
 from app.services.llm.groq_provider import GroqProvider
+from app.services.llm.openai_provider import OpenAIProvider
+from app.services.llm.anthropic_provider import AnthropicProvider
 
 logger = logging.getLogger(__name__)
 RETRYABLE_CODES = {"LLM_INVALID_RESPONSE", "LLM_TIMEOUT", "LLM_RATE_LIMITED", "LLM_PROVIDER_UNAVAILABLE", "LLM_EXECUTION_FAILED"}
@@ -79,10 +81,23 @@ class LLMService:
             key = self.settings.gemini_api_key
             model = self.settings.gemini_model
             provider_class = GeminiProvider
-        else:
+        elif provider == LLMProvider.GROQ.value:
             key = self.settings.groq_api_key
             model = self.settings.groq_model
             provider_class = GroqProvider
+        elif provider == LLMProvider.OPENAI.value:
+            key = self.settings.openai_api_key
+            model = self.settings.openai_model
+            provider_class = OpenAIProvider
+        elif provider == LLMProvider.ANTHROPIC.value:
+            key = self.settings.anthropic_api_key
+            model = self.settings.anthropic_model
+            provider_class = AnthropicProvider
+        else:
+            raise LLMProviderError(
+                "LLM_PROVIDER_UNAVAILABLE",
+                "The selected LLM provider is not supported.",
+            )
 
         api_key = key.get_secret_value().strip() if key else ""
         model_name = model.strip() if model else ""
@@ -91,8 +106,11 @@ class LLMService:
                 "LLM_PROVIDER_UNAVAILABLE",
                 "The selected LLM provider is not configured.",
             )
-        return provider_class(
+        provider_options = dict(
             api_key=api_key,
             model=model_name,
             timeout_seconds=self.settings.llm_request_timeout_seconds,
         )
+        if provider == LLMProvider.ANTHROPIC.value:
+            provider_options["max_tokens"] = self.settings.anthropic_max_tokens
+        return provider_class(**provider_options)

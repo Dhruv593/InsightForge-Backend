@@ -127,7 +127,7 @@ def traced(name, run_type="chain"):
                         label = prefix
                 instance = arguments.get("self")
                 provider = getattr(instance, "provider_name", None)
-                if provider in {"gemini", "groq"}:
+                if provider in {"gemini", "groq", "openai", "anthropic"}:
                     metadata["ls_provider"] = provider
                     metadata["ls_model_name"] = instance.model_name
                 inputs = {key: _summary(value) for key, value in arguments.items() if key not in {"self", "user", "invoke", "run_agent"}}

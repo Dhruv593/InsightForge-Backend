@@ -15,7 +15,7 @@ class LLMUsage(BaseModel):
 
 
 class LLMResult(BaseModel):
-    provider: Literal["gemini", "groq"]
+    provider: Literal["gemini", "groq", "openai", "anthropic"]
     model: str
     content: dict[str, Any]
     usage: LLMUsage

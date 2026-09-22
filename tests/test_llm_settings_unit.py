@@ -25,6 +25,8 @@ def make_service():
         default_llm_provider="gemini",
         gemini_api_key=SecretStr("private-gemini-key"), gemini_model="test-gemini-model",
         groq_api_key=SecretStr("private-groq-key"), groq_model="test-groq-model",
+        openai_api_key=SecretStr("private-openai-key"), openai_model="test-openai-model",
+        anthropic_api_key=SecretStr("private-anthropic-key"), anthropic_model="test-anthropic-model",
     )
     service = LLMSettingsService(AsyncMock(spec=AsyncSession), settings=settings)
     service.repository = AsyncMock()

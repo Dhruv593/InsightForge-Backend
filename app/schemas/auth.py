@@ -51,6 +51,7 @@ class UserResponse(BaseModel):
     is_admin: bool = False
     password_configured: bool = False
     is_email_verified: bool = False
+    onboarding_completed_at: datetime | None = None
 
 
 class ProfileUpdateRequest(BaseModel):

@@ -310,7 +310,7 @@ async def test_query_rolls_back_when_message_creation_fails() -> None:
 def test_stage5_validation_helpers() -> None:
     assert AnalysisRunService._normalize_provider(" GEMINI ") == "gemini"
     with pytest.raises(InvalidLLMProviderError):
-        AnalysisRunService._normalize_provider("openai")
+        AnalysisRunService._normalize_provider("unsupported-provider")
     with pytest.raises(MessageEmptyError):
         AnalysisRunService._normalize_query("  ")
     with pytest.raises(QueryTooLongError):

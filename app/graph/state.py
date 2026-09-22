@@ -7,7 +7,7 @@ class AnalysisState(TypedDict):
     dataset_id: str
     conversation_id: str
     user_query: str
-    llm_provider: Literal["gemini", "groq"]
+    llm_provider: Literal["gemini", "groq", "openai", "anthropic"]
     dataset_profile: dict[str, Any] | None
     conversation_context: list[dict[str, str]]
     supervisor_decision: dict[str, Any] | None
