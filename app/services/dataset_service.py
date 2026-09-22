@@ -1,3 +1,5 @@
+import asyncio
+import json
 import logging
 from uuid import UUID, uuid4
 
@@ -11,6 +13,9 @@ from app.core.exceptions import (
     DatasetDeleteFailedError,
     DatasetNotFoundError,
     DatasetUploadFailedError,
+    DatasetDownloadFailedError,
+    DatasetParseFailedError,
+    UnsupportedDataStructureError,
 )
 from app.models.dataset import Dataset, DatasetUploadStatus
 from app.models.user import User
@@ -21,6 +26,10 @@ from app.services.cloudinary_service import (
     CloudinaryUploadError,
 )
 from app.services.file_validation_service import FileValidationService
+from app.services.dataset_file_service import DatasetFileDownloadError, DatasetFileService
+from app.services.dataset_loader_service import DatasetLoaderService, DatasetParseError, UnsupportedDatasetStructureError
+from app.core.config import get_settings
+from app.schemas.dataset import DatasetPreviewResponse
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +40,8 @@ class DatasetService:
         self.datasets = DatasetRepository(session)
         self.file_validator = FileValidationService()
         self.cloudinary = CloudinaryService()
+        self.files = DatasetFileService()
+        self.loader = DatasetLoaderService(get_settings().max_profile_rows)
 
     async def upload_dataset(self, upload: UploadFile, user: User) -> Dataset:
         dataset_id = uuid4()
@@ -103,6 +114,45 @@ class DatasetService:
         if dataset is None:
             raise DatasetNotFoundError
         return dataset
+
+    async def get_preview(
+        self,
+        dataset_id: UUID,
+        user: User,
+        *,
+        limit: int,
+        offset: int,
+    ) -> DatasetPreviewResponse:
+        dataset = await self.get_dataset(dataset_id, user)
+        try:
+            file_bytes = await self.files.download(dataset)
+            loaded = await asyncio.to_thread(
+                self.loader.preview,
+                file_bytes,
+                dataset.file_type,
+                limit,
+                offset,
+            )
+        except DatasetFileDownloadError as exc:
+            raise DatasetDownloadFailedError from exc
+        except DatasetParseError as exc:
+            raise DatasetParseFailedError from exc
+        except UnsupportedDatasetStructureError as exc:
+            raise UnsupportedDataStructureError from exc
+
+        truncated = len(loaded.dataframe.index) > limit
+        frame = loaded.dataframe.head(limit).copy()
+        for column in frame.select_dtypes(include=["object", "string"]).columns:
+            frame[column] = frame[column].map(lambda value: value[:300] + "…" if isinstance(value, str) and len(value) > 300 else value)
+        serialized = json.loads(frame.to_json(orient="split", date_format="iso", date_unit="ms", default_handler=str))
+        return DatasetPreviewResponse(
+            columns=loaded.original_column_names,
+            rows=serialized.get("data", []),
+            returned_rows=len(frame.index),
+            offset=offset,
+            truncated=truncated,
+            warnings=[warning.message for warning in loaded.warnings],
+        )
 
     async def delete_dataset(self, dataset_id: UUID, user: User) -> None:
         dataset = await self.get_dataset(dataset_id, user)

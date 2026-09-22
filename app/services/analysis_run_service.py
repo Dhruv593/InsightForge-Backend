@@ -10,6 +10,7 @@ from app.core.exceptions import (
     DuplicateAnalysisRunError,
     DatasetNotProfiledError,
     InvalidLLMProviderError,
+    InsufficientCreditsError,
     MessageEmptyError,
     QueryTooLongError,
 )
@@ -20,6 +21,7 @@ from app.models.user import User
 from app.repositories.analysis_run_repository import AnalysisRunRepository
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.dataset_profile_repository import DatasetProfileRepository
+from app.repositories.user_repository import UserRepository
 from app.services.conversation_service import ConversationService
 from app.services.message_service import MessageService
 from app.services.llm_settings_service import LLMSettingsService
@@ -36,9 +38,11 @@ class AnalysisRunService:
         self.conversation_service = ConversationService(session)
         self.message_service = MessageService(session)
         self.llm_settings = LLMSettingsService(session)
+        self.users = UserRepository(session)
 
     async def create_pending_run(
-        self, conversation_id: UUID, query: str, llm_provider: str | None, user: User, *, force: bool = False
+        self, conversation_id: UUID, query: str, llm_provider: str | None, user: User, *, force: bool = False,
+        charge_credit: bool = True,
     ) -> tuple[Message, AnalysisRun]:
         conversation = await self.conversation_service.get_conversation(conversation_id, user)
         normalized_query = self._normalize_query(query)
@@ -55,6 +59,12 @@ class AnalysisRunService:
             )
             if duplicate is not None:
                 raise DuplicateAnalysisRunError(duplicate.id, duplicate.status)
+
+        if charge_credit:
+            remaining_credits = await self.users.consume_credit(user.id)
+            if remaining_credits is None:
+                raise InsufficientCreditsError
+            user.credits = remaining_credits
 
         analysis_run = AnalysisRun(
             user_id=user.id,
@@ -93,6 +103,7 @@ class AnalysisRunService:
             None,
             user,
             force=True,
+            charge_credit=False,
         )
 
     async def cancel_run(self, analysis_run_id: UUID, user: User) -> AnalysisRun:

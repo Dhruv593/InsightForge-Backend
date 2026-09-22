@@ -250,6 +250,15 @@ class InvalidLLMProviderError(AppError):
         )
 
 
+class InsufficientCreditsError(AppError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="INSUFFICIENT_CREDITS",
+            message="You do not have enough credits to ask another question.",
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+        )
+
+
 class AnalysisRunNotFoundError(AppError):
     def __init__(self) -> None:
         super().__init__(

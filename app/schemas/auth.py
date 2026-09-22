@@ -52,6 +52,7 @@ class UserResponse(BaseModel):
     password_configured: bool = False
     is_email_verified: bool = False
     onboarding_completed_at: datetime | None = None
+    credits: int = 5
 
 
 class ProfileUpdateRequest(BaseModel):

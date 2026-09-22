@@ -141,5 +141,5 @@ async def test_retry_does_not_forward_user_or_previous_provider():
     service.create_pending_run = AsyncMock(return_value=(Message(), AnalysisRun()))
     await service.retry_run(original.id, user, provider="gemini")
     service.create_pending_run.assert_awaited_once_with(
-        original.conversation_id, original.query, None, user, force=True,
+        original.conversation_id, original.query, None, user, force=True, charge_credit=False,
     )

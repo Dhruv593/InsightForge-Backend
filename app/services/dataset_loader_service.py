@@ -68,6 +68,79 @@ class DatasetLoaderService:
         except Exception as exc:
             raise DatasetParseError from exc
 
+    def preview(self, file_bytes: bytes, file_type: str, limit: int, offset: int = 0) -> LoadedDataset:
+        """Load one page of rows for the read-only UI preview."""
+        preview_rows = limit + 1
+        try:
+            if file_type == "csv":
+                text = self._decode_csv(file_bytes)
+                header = next(csv.reader(io.StringIO(text)), [])
+                dataframe = pd.read_csv(
+                    io.StringIO(text),
+                    nrows=preview_rows,
+                    skiprows=(lambda row: 0 < row <= offset) if offset else None,
+                )
+                names = [str(name) for name in header] if len(header) == dataframe.shape[1] else [str(name) for name in dataframe.columns]
+                loaded = LoadedDataset(dataframe, names, [])
+            elif file_type in {"xlsx", "xls"}:
+                if file_type == "xlsx":
+                    with zipfile.ZipFile(io.BytesIO(file_bytes)) as archive:
+                        entries = archive.infolist()
+                        if len(entries) > 10000 or sum(item.file_size for item in entries) > get_settings().max_expanded_file_mb * 1024 * 1024:
+                            raise UnsupportedDatasetStructureError
+                engine = "openpyxl" if file_type == "xlsx" else "xlrd"
+                workbook = pd.ExcelFile(io.BytesIO(file_bytes), engine=engine)
+                if not workbook.sheet_names:
+                    raise UnsupportedDatasetStructureError
+                first_sheet = workbook.sheet_names[0]
+                header_frame = workbook.parse(first_sheet, header=None, nrows=1)
+                dataframe = workbook.parse(
+                    first_sheet,
+                    nrows=preview_rows,
+                    skiprows=(lambda row: 0 < row <= offset) if offset else None,
+                )
+                names = [str(name) for name in dataframe.columns] if header_frame.empty else ["" if pd.isna(value) else str(value) for value in header_frame.iloc[0].tolist()]
+                if len(names) != dataframe.shape[1]:
+                    names = [str(name) for name in dataframe.columns]
+                warnings = [LoaderWarning("MULTIPLE_SHEETS_DETECTED", "Workbook contains multiple sheets. Only the first sheet is shown.")] if len(workbook.sheet_names) > 1 else []
+                loaded = LoadedDataset(dataframe, names, warnings)
+            elif file_type == "json":
+                loaded = self._load_json(file_bytes)
+                loaded.dataframe = loaded.dataframe.iloc[offset : offset + preview_rows]
+            elif file_type == "parquet":
+                parquet_file = parquet.ParquetFile(io.BytesIO(file_bytes))
+                if sum(parquet_file.metadata.row_group(i).total_byte_size for i in range(parquet_file.metadata.num_row_groups)) > get_settings().max_expanded_file_mb * 1024 * 1024:
+                    raise UnsupportedDatasetStructureError
+                frames: list[pd.DataFrame] = []
+                remaining_offset = offset
+                remaining_rows = preview_rows
+                for batch in parquet_file.iter_batches(batch_size=max(preview_rows, 1024)):
+                    if remaining_offset >= batch.num_rows:
+                        remaining_offset -= batch.num_rows
+                        continue
+                    frame = batch.to_pandas().iloc[
+                        remaining_offset : remaining_offset + remaining_rows
+                    ]
+                    frames.append(frame)
+                    remaining_rows -= len(frame.index)
+                    remaining_offset = 0
+                    if remaining_rows <= 0:
+                        break
+                dataframe = (
+                    pd.concat(frames, ignore_index=True)
+                    if frames
+                    else pd.DataFrame(columns=parquet_file.schema.names)
+                )
+                loaded = LoadedDataset(dataframe, [str(name) for name in parquet_file.schema.names], [])
+            else:
+                raise DatasetParseError
+            self._enforce_flat_structure(loaded.dataframe)
+            return loaded
+        except UnsupportedDatasetStructureError:
+            raise
+        except Exception as exc:
+            raise DatasetParseError from exc
+
     def _load_csv(self, file_bytes: bytes) -> LoadedDataset:
         text = self._decode_csv(file_bytes)
         header = next(csv.reader(io.StringIO(text)), [])

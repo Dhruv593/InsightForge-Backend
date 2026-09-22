@@ -138,6 +138,39 @@ class LandingContentResponse(BaseModel):
     updated_at: datetime | None = None
 
 
+class PlanItem(BaseModel):
+    name: ShortText
+    description: BodyText
+    price_label: ShortText
+    amount_paise: int = Field(default=0, ge=0, le=100_000_000)
+    billing_label: ShortText
+    credits: int = Field(ge=1, le=1000000)
+    features: list[ShortText] = Field(min_length=1, max_length=12)
+    button_label: ShortText
+    button_href: str = Field(min_length=1, max_length=500)
+    highlighted: bool = False
+
+    _validate_button_href = field_validator("button_href")(_safe_location)
+
+
+class PlansContent(BaseModel):
+    enabled: bool = False
+    title: ShortText
+    description: BodyText
+    note: ShortText
+    plans: list[PlanItem] = Field(min_length=1, max_length=6)
+
+
+class PlansContentUpdate(BaseModel):
+    content: PlansContent
+
+
+class PlansContentResponse(BaseModel):
+    content: PlansContent
+    version: int = 0
+    updated_at: datetime | None = None
+
+
 class ContentImageResponse(BaseModel):
     url: str
     public_id: str

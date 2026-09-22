@@ -1,7 +1,9 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DatasetResponse(BaseModel):
@@ -26,3 +28,12 @@ class DatasetListResponse(BaseModel):
 
 class DatasetDeleteResponse(BaseModel):
     status: str = "deleted"
+
+
+class DatasetPreviewResponse(BaseModel):
+    columns: list[str]
+    rows: list[list[Any]]
+    returned_rows: int
+    offset: int
+    truncated: bool
+    warnings: list[str] = Field(default_factory=list)

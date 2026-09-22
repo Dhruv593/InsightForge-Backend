@@ -7,9 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import AdminUser
 from app.core.exceptions import AppError
 from app.db.session import get_db_session
-from app.schemas.site_content import BlogContent, BlogDetailResponse, BlogListResponse, BlogSummaryResponse, BlogWriteRequest, ContentImageResponse, LandingContentResponse, LandingContentUpdate, LandingPageContent
+from app.schemas.site_content import BlogContent, BlogDetailResponse, BlogListResponse, BlogSummaryResponse, BlogWriteRequest, ContentImageResponse, LandingContentResponse, LandingContentUpdate, LandingPageContent, PlansContent, PlansContentResponse, PlansContentUpdate
 from app.services.cloudinary_service import CloudinaryService, CloudinaryUploadError
-from app.services.site_content_service import SiteContentService
+from app.services.site_content_service import DEFAULT_PLANS_CONTENT, SiteContentService
 
 router = APIRouter(tags=["site-content"])
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
@@ -28,6 +28,12 @@ def _response(entry) -> LandingContentResponse:
         version=entry.version,
         updated_at=entry.updated_at,
     )
+
+
+def _plans_response(entry) -> PlansContentResponse:
+    if entry is None:
+        return PlansContentResponse(content=DEFAULT_PLANS_CONTENT)
+    return PlansContentResponse(content=PlansContent.model_validate(entry.content), version=entry.version, updated_at=entry.updated_at)
 
 
 def _blog_response(entry, *, detail: bool):
@@ -68,6 +74,21 @@ async def admin_landing(_: AdminUser, content: Annotated[SiteContentService, Dep
 @router.put("/admin/site-content/landing", response_model=LandingContentResponse)
 async def update_landing(payload: LandingContentUpdate, user: AdminUser, content: Annotated[SiteContentService, Depends(service)]) -> LandingContentResponse:
     return _response(await content.update_landing(payload.content, user))
+
+
+@router.get("/site-content/plans", response_model=PlansContentResponse)
+async def public_plans(content: Annotated[SiteContentService, Depends(service)]) -> PlansContentResponse:
+    return _plans_response(await content.get_plans(published_only=True))
+
+
+@router.get("/admin/site-content/plans", response_model=PlansContentResponse)
+async def admin_plans(_: AdminUser, content: Annotated[SiteContentService, Depends(service)]) -> PlansContentResponse:
+    return _plans_response(await content.get_plans(published_only=False))
+
+
+@router.put("/admin/site-content/plans", response_model=PlansContentResponse)
+async def update_plans(payload: PlansContentUpdate, user: AdminUser, content: Annotated[SiteContentService, Depends(service)]) -> PlansContentResponse:
+    return _plans_response(await content.update_plans(payload.content, user))
 
 
 @router.get("/blogs", response_model=BlogListResponse)

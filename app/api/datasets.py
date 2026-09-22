@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 
 from app.api.dependencies import (
     CurrentUser,
@@ -12,6 +12,7 @@ from app.schemas.dataset import (
     DatasetDeleteResponse,
     DatasetListResponse,
     DatasetResponse,
+    DatasetPreviewResponse,
 )
 from app.schemas.dataset_profile import DatasetProfileResponse
 from app.services.dataset_profiling_service import DatasetProfilingService
@@ -52,6 +53,17 @@ async def get_dataset(
 ) -> DatasetResponse:
     dataset = await dataset_service.get_dataset(dataset_id, user)
     return DatasetResponse.model_validate(dataset)
+
+
+@router.get("/{dataset_id}/preview", response_model=DatasetPreviewResponse)
+async def preview_dataset(
+    dataset_id: UUID,
+    user: CurrentUser,
+    dataset_service: Annotated[DatasetService, Depends(get_dataset_service)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> DatasetPreviewResponse:
+    return await dataset_service.get_preview(dataset_id, user, limit=limit, offset=offset)
 
 
 @router.delete("/{dataset_id}", response_model=DatasetDeleteResponse)

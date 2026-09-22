@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr | None = None
     anthropic_model: str | None = None
     anthropic_max_tokens: int = Field(default=8192, gt=0, le=64_000)
+    razorpay_key_id: str = ""
+    razorpay_key_secret: SecretStr | None = None
+    razorpay_webhook_secret: SecretStr | None = None
+    razorpay_request_timeout_seconds: int = Field(default=15, gt=0, le=60)
     llm_request_timeout_seconds: int = Field(default=60, gt=0, le=300)
     max_expanded_file_mb: int = Field(default=100, gt=0, le=512)
     max_dataset_columns: int = Field(default=200, gt=0, le=1000)
