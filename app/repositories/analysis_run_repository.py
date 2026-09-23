@@ -78,6 +78,15 @@ class AnalysisRunRepository:
         )
         return list(result.scalars().all())
 
+    async def count_active_for_user(self, user_id: UUID) -> int:
+        result = await self.session.execute(
+            select(func.count(AnalysisRun.id)).where(
+                AnalysisRun.user_id == user_id,
+                AnalysisRun.status.in_(("pending", "running")),
+            )
+        )
+        return int(result.scalar_one())
+
     async def requeue_interrupted(self) -> int:
         result = await self.session.execute(
             update(AnalysisRun)

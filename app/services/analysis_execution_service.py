@@ -16,6 +16,7 @@ from app.core.exceptions import (
     AnalysisRunNotExecutableError,
     AnalysisRunNotFoundError,
     DatasetNotProfiledError,
+    InsufficientCreditsError,
     LLMRequestError,
     AnalysisToolError,
 )
@@ -38,6 +39,7 @@ from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.dataset_profile_repository import DatasetProfileRepository
 from app.repositories.dataset_repository import DatasetRepository
 from app.repositories.message_repository import MessageRepository
+from app.repositories.user_repository import UserRepository
 from app.schemas.analysis_plan import AnalysisPlanOutput
 from app.schemas.llm import LLMResult
 from app.services.agent_run_service import AgentRunService
@@ -88,6 +90,7 @@ class AnalysisExecutionService:
         self.profiles = DatasetProfileRepository(session)
         self.conversations = ConversationRepository(session)
         self.messages = MessageRepository(session)
+        self.users = UserRepository(session)
         self.message_service = MessageService(session)
         self.plan_service = AnalysisPlanService(session)
         self.profile_context_service = ProfileContextService()
@@ -544,6 +547,9 @@ class AnalysisExecutionService:
             message = await self.message_service.create_assistant_message(
                 run.conversation_id, run, assistant_content
             )
+            remaining_credits = await self.users.consume_credit(run.user_id)
+            if remaining_credits is None:
+                raise InsufficientCreditsError
             completed_at = datetime.now(timezone.utc)
             await self.runs.update_status(
                 run,

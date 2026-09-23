@@ -25,7 +25,7 @@ DEFAULT_PLANS_CONTENT = PlansContent.model_validate({
     "enabled": False,
     "title": "Choose credits that fit your workflow.",
     "description": "Purchase question credits when you need more room to explore your data.",
-    "note": "Credits are used when a new question is submitted. Retrying a failed analysis does not use another credit.",
+    "note": "One credit is used only after an analysis finishes successfully. Failed or cancelled analyses do not use credits.",
     "plans": [
         {
             "name": "Starter", "description": "For occasional analysis and individual projects.",

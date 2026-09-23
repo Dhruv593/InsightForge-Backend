@@ -124,12 +124,16 @@ async def test_new_runs_ignore_client_provider(requested):
     service.llm_settings.selected_provider = AsyncMock(return_value="groq")
     service.profiles.get_by_dataset_id = AsyncMock(return_value=DatasetProfile(profile_status="completed"))
     service.runs.find_duplicate = AsyncMock(return_value=None)
+    service.runs.count_active_for_user = AsyncMock(return_value=0)
+    service.users.get_by_id_for_update = AsyncMock(return_value=User(id=user.id, credits=5))
+    service.users.consume_credit = AsyncMock()
     service.runs.create = AsyncMock()
     service.conversations.touch = AsyncMock()
     service.message_service.create_user_message = AsyncMock(return_value=Message())
     _, run = await service.create_pending_run(conversation.id, "Show revenue", requested, user)
     assert run.llm_provider == "groq"
     service.llm_settings.selected_provider.assert_awaited_once()
+    service.users.consume_credit.assert_not_awaited()
 
 
 async def test_retry_does_not_forward_user_or_previous_provider():
@@ -141,5 +145,5 @@ async def test_retry_does_not_forward_user_or_previous_provider():
     service.create_pending_run = AsyncMock(return_value=(Message(), AnalysisRun()))
     await service.retry_run(original.id, user, provider="gemini")
     service.create_pending_run.assert_awaited_once_with(
-        original.conversation_id, original.query, None, user, force=True, charge_credit=False,
+        original.conversation_id, original.query, None, user, force=True,
     )

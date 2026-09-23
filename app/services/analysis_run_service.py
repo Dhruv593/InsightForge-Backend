@@ -42,7 +42,6 @@ class AnalysisRunService:
 
     async def create_pending_run(
         self, conversation_id: UUID, query: str, llm_provider: str | None, user: User, *, force: bool = False,
-        charge_credit: bool = True,
     ) -> tuple[Message, AnalysisRun]:
         conversation = await self.conversation_service.get_conversation(conversation_id, user)
         normalized_query = self._normalize_query(query)
@@ -60,11 +59,13 @@ class AnalysisRunService:
             if duplicate is not None:
                 raise DuplicateAnalysisRunError(duplicate.id, duplicate.status)
 
-        if charge_credit:
-            remaining_credits = await self.users.consume_credit(user.id)
-            if remaining_credits is None:
-                raise InsufficientCreditsError
-            user.credits = remaining_credits
+        # Lock the balance while reserving capacity for this pending run. The
+        # balance itself is only reduced when the answer is completed.
+        locked_user = await self.users.get_by_id_for_update(user.id)
+        active_reservations = await self.runs.count_active_for_user(user.id)
+        if locked_user is None or locked_user.credits <= active_reservations:
+            raise InsufficientCreditsError
+        user.credits = locked_user.credits
 
         analysis_run = AnalysisRun(
             user_id=user.id,
@@ -103,7 +104,6 @@ class AnalysisRunService:
             None,
             user,
             force=True,
-            charge_credit=False,
         )
 
     async def cancel_run(self, analysis_run_id: UUID, user: User) -> AnalysisRun:

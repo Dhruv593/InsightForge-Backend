@@ -295,6 +295,8 @@ async def test_query_rolls_back_when_message_creation_fails() -> None:
     service.llm_settings.selected_provider = AsyncMock(return_value="gemini")
     service.profiles.get_by_dataset_id = AsyncMock(return_value=profile)
     service.runs.find_duplicate = AsyncMock(return_value=None)
+    service.runs.count_active_for_user = AsyncMock(return_value=0)
+    service.users.get_by_id_for_update = AsyncMock(return_value=User(id=user.id, credits=5))
     service.runs.create = AsyncMock(side_effect=lambda run: run)
     service.message_service.create_user_message = AsyncMock(
         side_effect=SQLAlchemyError("forced failure")

@@ -244,6 +244,28 @@ async def test_each_agent_invocation_creates_and_completes_a_separate_log() -> N
     assert session.commit.await_count == 6
 
 
+async def test_credit_is_consumed_only_when_answer_is_completed() -> None:
+    session = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock(), refresh=AsyncMock())
+    service = AnalysisExecutionService(session, llm_service=SimpleNamespace())
+    run = SimpleNamespace(
+        id=uuid4(), user_id=uuid4(), conversation_id=uuid4(), started_at=None,
+    )
+    message = SimpleNamespace(id=uuid4())
+    service.message_service.create_assistant_message = AsyncMock(return_value=message)
+    service.users.consume_credit = AsyncMock(return_value=4)
+    service.runs.update_status = AsyncMock()
+
+    completed_run, completed_message = await service._complete(
+        run, {"assistant_message": "The completed answer."}
+    )
+
+    assert completed_run is run
+    assert completed_message is message
+    service.users.consume_credit.assert_awaited_once_with(run.user_id)
+    service.runs.update_status.assert_awaited_once()
+    session.commit.assert_awaited_once()
+
+
 @pytest.mark.parametrize(
     "response_model",
     [SupervisorDecision, ProfileInterpretation, AnalysisPlanOutput],
