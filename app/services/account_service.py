@@ -8,6 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppError, InvalidCredentialsError
 from app.core.security import hash_password, verify_password
+from app.email_templates import (
+    RenderedEmail,
+    account_deleted_email,
+    email_verification_email,
+    password_changed_email,
+    password_reset_email,
+)
 from app.models.user import User
 from app.repositories.dataset_repository import DatasetRepository
 from app.repositories.session_repository import SessionRepository
@@ -15,6 +22,7 @@ from app.repositories.account_token_repository import AccountTokenRepository
 from app.repositories.user_repository import UserRepository
 from app.services.cloudinary_service import CloudinaryDeleteError, CloudinaryService
 from app.services.email_service import EmailDeliveryUnavailable, EmailService
+from app.services.site_content_service import SiteContentService
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -29,6 +37,7 @@ class AccountService:
         self.tokens = AccountTokenRepository(session)
         self.users = UserRepository(session)
         self.email = EmailService()
+        self.content = SiteContentService(session)
 
     async def update_profile(self, user: User, name: str) -> User:
         user.name = name.strip()
@@ -50,6 +59,16 @@ class AccountService:
         user.token_version += 1
         await self.sessions.revoke_all_for_user(user.id)
         await self.session.commit()
+        settings = get_settings()
+        templates = await self.content.resolve_email_templates()
+        email = password_changed_email(
+            user_name=user.name,
+            changed_at=datetime.now(timezone.utc),
+            frontend_url=settings.frontend_url,
+            support_email=self._support_email(),
+            template=templates.password_changed,
+        )
+        await self._send_best_effort(user.email, email, "password change", user.id)
 
     async def list_sessions(self, user: User):
         return await self.sessions.list_for_user(user.id)
@@ -69,6 +88,9 @@ class AccountService:
             raise AppError("ACCOUNT_DELETE_CONFIRMATION_REQUIRED", "Enter DELETE to confirm account deletion.", 422)
         if user.password_hash and (not password or not verify_password(password, user.password_hash)):
             raise InvalidCredentialsError
+        user_id = user.id
+        user_name = user.name
+        recipient = user.email
         for dataset in await self.datasets.list_for_user(user.id):
             try:
                 await self.cloudinary.delete_dataset_file(
@@ -82,6 +104,16 @@ class AccountService:
                 raise AppError("ACCOUNT_DATA_DELETE_FAILED", "Stored dataset files could not be deleted. Please try again.", 502) from exc
         await self.session.delete(user)
         await self.session.commit()
+        settings = get_settings()
+        templates = await self.content.resolve_email_templates()
+        email = account_deleted_email(
+            user_name=user_name,
+            deleted_at=datetime.now(timezone.utc),
+            frontend_url=settings.frontend_url,
+            support_email=self._support_email(),
+            template=templates.account_deleted,
+        )
+        await self._send_best_effort(recipient, email, "account deletion", user_id)
 
     async def send_verification(self, user: User) -> None:
         if user.is_email_verified:
@@ -89,9 +121,18 @@ class AccountService:
         if await self.tokens.created_recently(user.id, "email_verification"):
             return
         raw = await self._create_token(user.id, "email_verification", hours=24)
-        url = f"{get_settings().frontend_url.rstrip('/')}/verify-email?token={raw}"
+        settings = get_settings()
+        templates = await self.content.resolve_email_templates()
+        url = f"{settings.frontend_url.rstrip('/')}/verify-email?token={raw}"
+        email = email_verification_email(
+            user_name=user.name,
+            verification_url=url,
+            frontend_url=settings.frontend_url,
+            support_email=self._support_email(),
+            template=templates.email_verification,
+        )
         try:
-            await self.email.send(recipient=user.email, subject="Verify your Tatparya email", body=f"Verify your email by opening this link:\n\n{url}\n\nThis link expires in 24 hours.")
+            await self.email.send_rendered(recipient=user.email, email=email)
         except EmailDeliveryUnavailable as exc:
             raise AppError("EMAIL_DELIVERY_NOT_CONFIGURED", "Email delivery is not configured yet.", 503) from exc
 
@@ -112,9 +153,18 @@ class AccountService:
         if await self.tokens.created_recently(user.id, "password_reset"):
             return
         raw = await self._create_token(user.id, "password_reset", hours=1)
-        url = f"{get_settings().frontend_url.rstrip('/')}/reset-password?token={raw}"
+        settings = get_settings()
+        templates = await self.content.resolve_email_templates()
+        url = f"{settings.frontend_url.rstrip('/')}/reset-password?token={raw}"
+        email = password_reset_email(
+            user_name=user.name,
+            reset_url=url,
+            frontend_url=settings.frontend_url,
+            support_email=self._support_email(),
+            template=templates.password_reset,
+        )
         try:
-            await self.email.send(recipient=user.email, subject="Reset your Tatparya password", body=f"Reset your password by opening this link:\n\n{url}\n\nThis link expires in one hour.")
+            await self.email.send_rendered(recipient=user.email, email=email)
         except Exception:
             logger.exception("Password reset email could not be delivered user_id=%s", user.id)
 
@@ -129,6 +179,16 @@ class AccountService:
         user.token_version += 1
         await self.sessions.revoke_all_for_user(user.id)
         await self.session.commit()
+        settings = get_settings()
+        templates = await self.content.resolve_email_templates()
+        email = password_changed_email(
+            user_name=user.name,
+            changed_at=datetime.now(timezone.utc),
+            frontend_url=settings.frontend_url,
+            support_email=self._support_email(),
+            template=templates.password_changed,
+        )
+        await self._send_best_effort(user.email, email, "password reset confirmation", user.id)
 
     async def _create_token(self, user_id: UUID, token_type: str, *, hours: int) -> str:
         raw = secrets.token_urlsafe(32)
@@ -139,3 +199,14 @@ class AccountService:
     @staticmethod
     def _hash_token(raw: str) -> str:
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _support_email() -> str:
+        settings = get_settings()
+        return settings.support_email.strip() or settings.smtp_from_email.strip()
+
+    async def _send_best_effort(self, recipient: str, email: RenderedEmail, event: str, user_id: UUID) -> None:
+        try:
+            await self.email.send_rendered(recipient=recipient, email=email)
+        except Exception:
+            logger.exception("%s email could not be delivered user_id=%s", event.capitalize(), user_id)

@@ -9,6 +9,7 @@ from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppError
+from app.email_templates import DEFAULT_EMAIL_TEMPLATES
 from app.models.payment_order import PaymentOrder
 from app.models.user import User
 from app.schemas.payment import PaymentResultResponse
@@ -25,6 +26,7 @@ def payment_service() -> PaymentService:
         razorpay_webhook_secret=SecretStr("webhook-secret"),
         razorpay_request_timeout_seconds=15,
     )
+    service.content.resolve_email_templates = AsyncMock(return_value=DEFAULT_EMAIL_TEMPLATES)
     return service
 
 
@@ -73,3 +75,26 @@ async def test_paid_order_is_idempotent_and_does_not_add_credits_twice():
     assert result.credits_added == 0
     assert result.credit_balance == 30
     service.users.adjust_credits.assert_not_awaited()
+
+
+async def test_captured_payment_sends_confirmation_after_credits_are_committed():
+    service = payment_service()
+    service.settings.frontend_url = "https://tatparya.example"
+    service.settings.support_email = "support@tatparya.example"
+    service.settings.smtp_from_email = "no-reply@tatparya.example"
+    user = User(id=uuid4(), name="Test User", email="test@example.com", credits=30)
+    order = PaymentOrder(user_id=user.id, razorpay_order_id="order_test123", plan_name="Starter", credits=25, amount_paise=49900, currency="INR", receipt="tp_test")
+    payment = {"id": "pay_test123", "order_id": order.razorpay_order_id, "status": "captured", "amount": 49900, "currency": "INR"}
+    service.orders.get_for_update = AsyncMock(return_value=order)
+    service.users.adjust_credits = AsyncMock(return_value=30)
+    service.users.get_by_id = AsyncMock(return_value=user)
+    service.email.send_rendered = AsyncMock()
+
+    result = await service._fulfill(order_id=order.razorpay_order_id, payment=payment)
+
+    assert result == PaymentResultResponse(status="paid", credits_added=25, credit_balance=30)
+    service.session.commit.assert_awaited_once()
+    service.email.send_rendered.assert_awaited_once()
+    sent = service.email.send_rendered.await_args.kwargs["email"]
+    assert sent.subject == "Your Tatparya credits are ready"
+    assert "pay_test123" in sent.text

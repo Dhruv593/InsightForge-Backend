@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.exceptions import AppError
+from app.email_templates import payment_confirmation_email
 from app.models.payment_order import PaymentOrder
 from app.models.user import User
 from app.repositories.payment_order_repository import PaymentOrderRepository
@@ -17,6 +18,7 @@ from app.repositories.user_repository import UserRepository
 from app.schemas.payment import PaymentOrderResponse, PaymentResultResponse
 from app.schemas.site_content import PlansContent
 from app.services.site_content_service import DEFAULT_PLANS_CONTENT, SiteContentService
+from app.services.email_service import EmailService
 
 logger = logging.getLogger(__name__)
 RAZORPAY_API = "https://api.razorpay.com/v1"
@@ -29,6 +31,7 @@ class PaymentService:
         self.users = UserRepository(session)
         self.content = SiteContentService(session)
         self.settings = get_settings()
+        self.email = EmailService()
 
     def _credentials(self) -> tuple[str, str]:
         secret = self.settings.razorpay_key_secret.get_secret_value() if self.settings.razorpay_key_secret else ""
@@ -161,4 +164,33 @@ class PaymentService:
             await self.session.rollback()
             raise
         logger.info("Payment fulfilled order_id=%s user_id=%s credits=%s", order.razorpay_order_id, order.user_id, order.credits)
+        user = await self.users.get_by_id(order.user_id)
+        if user is not None:
+            templates = await self.content.resolve_email_templates()
+            frontend_url = getattr(self.settings, "frontend_url", "http://localhost:5173")
+            support_email = (
+                getattr(self.settings, "support_email", "")
+                or getattr(self.settings, "smtp_from_email", "")
+            )
+            email = payment_confirmation_email(
+                user_name=user.name,
+                plan_name=order.plan_name,
+                credits_added=order.credits,
+                credit_balance=balance,
+                amount_minor=order.amount_paise,
+                currency=order.currency,
+                payment_id=payment_id,
+                paid_at=order.paid_at or datetime.now(timezone.utc),
+                frontend_url=frontend_url,
+                support_email=support_email,
+                template=templates.payment_confirmation,
+            )
+            try:
+                await self.email.send_rendered(recipient=user.email, email=email)
+            except Exception:
+                logger.exception(
+                    "Payment confirmation email could not be delivered order_id=%s user_id=%s",
+                    order.razorpay_order_id,
+                    order.user_id,
+                )
         return PaymentResultResponse(status="paid", credits_added=order.credits, credit_balance=balance)

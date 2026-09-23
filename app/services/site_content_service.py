@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.content_entry import ContentEntry
 from app.models.user import User
 from app.repositories.content_entry_repository import ContentEntryRepository
+from app.schemas.email_template import EmailTemplatesContent
 from app.schemas.site_content import LandingPageContent, PlansContent
 from app.schemas.site_content import BlogContent
 from app.core.exceptions import AppError
@@ -17,6 +18,8 @@ LANDING_SLUG = "home"
 BLOG_CONTENT_TYPE = "blog"
 PLANS_CONTENT_TYPE = "plans_page"
 PLANS_SLUG = "plans"
+EMAIL_TEMPLATES_CONTENT_TYPE = "email_templates"
+EMAIL_TEMPLATES_SLUG = "transactional"
 
 DEFAULT_PLANS_CONTENT = PlansContent.model_validate({
     "enabled": False,
@@ -95,6 +98,44 @@ class SiteContentService:
             await self.session.rollback()
             raise
         logger.info("Plans content updated entry_id=%s version=%s admin_id=%s", entry.id, entry.version, user.id)
+        return entry
+
+    async def get_email_templates(self) -> ContentEntry | None:
+        return await self.entries.get(EMAIL_TEMPLATES_CONTENT_TYPE, EMAIL_TEMPLATES_SLUG)
+
+    async def resolve_email_templates(self) -> EmailTemplatesContent:
+        from app.email_templates import DEFAULT_EMAIL_TEMPLATES
+
+        try:
+            entry = await self.get_email_templates()
+            return EmailTemplatesContent.model_validate(entry.content) if entry is not None else DEFAULT_EMAIL_TEMPLATES
+        except Exception:
+            logger.exception("Saved email templates could not be resolved; using application defaults")
+            return DEFAULT_EMAIL_TEMPLATES
+
+    async def update_email_templates(self, content: EmailTemplatesContent, user: User) -> ContentEntry:
+        entry = await self.get_email_templates()
+        if entry is None:
+            entry = ContentEntry(
+                content_type=EMAIL_TEMPLATES_CONTENT_TYPE,
+                slug=EMAIL_TEMPLATES_SLUG,
+                status="published",
+                content=content.model_dump(mode="json"),
+                updated_by=user.id,
+            )
+        else:
+            entry.content = content.model_dump(mode="json")
+            entry.status = "published"
+            entry.version += 1
+            entry.updated_by = user.id
+        try:
+            await self.entries.save(entry)
+            await self.session.commit()
+            await self.session.refresh(entry)
+        except SQLAlchemyError:
+            await self.session.rollback()
+            raise
+        logger.info("Email templates updated entry_id=%s version=%s admin_id=%s", entry.id, entry.version, user.id)
         return entry
 
     async def list_blogs(self, *, published_only: bool) -> list[ContentEntry]:

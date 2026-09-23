@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import AdminUser
 from app.core.exceptions import AppError
 from app.db.session import get_db_session
+from app.email_templates import DEFAULT_EMAIL_TEMPLATES
+from app.schemas.email_template import EmailTemplatesContent, EmailTemplatesResponse, EmailTemplatesUpdate, TEMPLATE_VARIABLES
 from app.schemas.site_content import BlogContent, BlogDetailResponse, BlogListResponse, BlogSummaryResponse, BlogWriteRequest, ContentImageResponse, LandingContentResponse, LandingContentUpdate, LandingPageContent, PlansContent, PlansContentResponse, PlansContentUpdate
 from app.services.cloudinary_service import CloudinaryService, CloudinaryUploadError
 from app.services.site_content_service import DEFAULT_PLANS_CONTENT, SiteContentService
@@ -34,6 +36,16 @@ def _plans_response(entry) -> PlansContentResponse:
     if entry is None:
         return PlansContentResponse(content=DEFAULT_PLANS_CONTENT)
     return PlansContentResponse(content=PlansContent.model_validate(entry.content), version=entry.version, updated_at=entry.updated_at)
+
+
+def _email_templates_response(entry) -> EmailTemplatesResponse:
+    content = DEFAULT_EMAIL_TEMPLATES if entry is None else EmailTemplatesContent.model_validate(entry.content)
+    return EmailTemplatesResponse(
+        content=content,
+        variables={name: list(values) for name, values in TEMPLATE_VARIABLES.items()},
+        version=entry.version if entry is not None else 0,
+        updated_at=entry.updated_at if entry is not None else None,
+    )
 
 
 def _blog_response(entry, *, detail: bool):
@@ -89,6 +101,16 @@ async def admin_plans(_: AdminUser, content: Annotated[SiteContentService, Depen
 @router.put("/admin/site-content/plans", response_model=PlansContentResponse)
 async def update_plans(payload: PlansContentUpdate, user: AdminUser, content: Annotated[SiteContentService, Depends(service)]) -> PlansContentResponse:
     return _plans_response(await content.update_plans(payload.content, user))
+
+
+@router.get("/admin/site-content/email-templates", response_model=EmailTemplatesResponse)
+async def admin_email_templates(_: AdminUser, content: Annotated[SiteContentService, Depends(service)]) -> EmailTemplatesResponse:
+    return _email_templates_response(await content.get_email_templates())
+
+
+@router.put("/admin/site-content/email-templates", response_model=EmailTemplatesResponse)
+async def update_email_templates(payload: EmailTemplatesUpdate, user: AdminUser, content: Annotated[SiteContentService, Depends(service)]) -> EmailTemplatesResponse:
+    return _email_templates_response(await content.update_email_templates(payload.content, user))
 
 
 @router.get("/blogs", response_model=BlogListResponse)

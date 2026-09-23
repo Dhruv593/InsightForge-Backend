@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     smtp_username: str = ""
     smtp_password: SecretStr | None = None
     smtp_from_email: str = ""
+    smtp_from_name: str = "Tatparya"
+    support_email: str = ""
     smtp_use_tls: bool = True
     cloudinary_cloud_name: str = Field(min_length=1)
     cloudinary_api_key: SecretStr = Field(min_length=1)

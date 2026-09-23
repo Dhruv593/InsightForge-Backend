@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -6,9 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import AdminUser
 from app.core.exceptions import AppError
+from app.core.config import get_settings
 from app.db.session import get_db_session
+from app.email_templates import credit_adjusted_email
 from app.repositories.user_repository import UserRepository
 from app.schemas.admin_user import AdminAccessUpdate, AdminUserItem, AdminUserListResponse, CreditAdjustment
+from app.services.email_service import EmailService
+from app.services.site_content_service import SiteContentService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/users", tags=["admin-users"])
 
@@ -65,4 +72,20 @@ async def adjust_user_credits(
     target.credits = remaining
     await session.commit()
     await session.refresh(target)
+    settings = get_settings()
+    templates = await SiteContentService(session).resolve_email_templates()
+    email = credit_adjusted_email(
+        user_name=target.name,
+        previous_balance=remaining - payload.delta,
+        adjustment=payload.delta,
+        new_balance=remaining,
+        reason=payload.reason,
+        frontend_url=settings.frontend_url,
+        support_email=settings.support_email.strip() or settings.smtp_from_email.strip(),
+        template=templates.credit_adjusted,
+    )
+    try:
+        await EmailService().send_rendered(recipient=target.email, email=email)
+    except Exception:
+        logger.exception("Credit adjustment email could not be delivered user_id=%s", target.id)
     return AdminUserItem.model_validate(target)
