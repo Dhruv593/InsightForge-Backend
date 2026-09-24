@@ -97,6 +97,27 @@ class CloudinaryService:
             logger.warning("CMS image upload failed error_type=%s", type(exc).__name__)
             raise CloudinaryUploadError from exc
 
+    async def upload_content_video(self, *, file_object: BinaryIO, file_name: str) -> CloudinaryUploadResult:
+        """Upload a public CMS tutorial video after API media and size validation."""
+        safe_stem = "".join(character for character in file_name.rsplit(".", 1)[0] if character.isalnum() or character in {"-", "_"})[:80] or "tutorial"
+        public_id = f"{safe_stem}-{uuid4().hex[:12]}"
+        try:
+            response: dict[str, Any] = await asyncio.to_thread(
+                cloudinary.uploader.upload,
+                file_object,
+                folder="tatparya/site-content",
+                public_id=public_id,
+                resource_type="video",
+                type="upload",
+                overwrite=False,
+                unique_filename=False,
+                use_filename=False,
+            )
+            return self._parse_upload_response(response)
+        except Exception as exc:
+            logger.warning("CMS video upload failed error_type=%s", type(exc).__name__)
+            raise CloudinaryUploadError from exc
+
     async def delete_dataset_file(
         self,
         *,

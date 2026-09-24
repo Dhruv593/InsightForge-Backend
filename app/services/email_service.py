@@ -20,6 +20,7 @@ class EmailService:
         subject: str,
         text_body: str,
         html_body: str | None = None,
+        reply_to: str | None = None,
     ) -> None:
         settings = get_settings()
         if not settings.smtp_host or not settings.smtp_from_email:
@@ -31,8 +32,8 @@ class EmailService:
             message["From"] = formataddr((settings.smtp_from_name, from_address))
             message["To"] = recipient
             message["Subject"] = subject
-            if settings.support_email:
-                message["Reply-To"] = settings.support_email
+            if reply_to or settings.support_email:
+                message["Reply-To"] = reply_to or settings.support_email
             message.set_content(text_body)
             if html_body:
                 message.add_alternative(html_body, subtype="html")

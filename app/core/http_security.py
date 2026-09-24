@@ -68,6 +68,9 @@ class SecurityMiddleware:
             if path in {prefix + "/auth/register", prefix + "/account/forgot-password"}:
                 if not self.allowed(("account_creation", client), 10, window=600):
                     return await reject("RATE_LIMITED", "Too many account requests. Please try again later.", 429, retry_after=600)
+            if path == prefix + "/site-content/contact":
+                if not self.allowed(("contact", client), 5, window=600):
+                    return await reject("RATE_LIMITED", "Too many contact requests. Please try again later.", 429, retry_after=600)
             expensive = path.endswith(("/query", "/retry", "/profile", "/execute")) or path == prefix + "/datasets"
             if expensive:
                 identity = client
@@ -84,6 +87,8 @@ class SecurityMiddleware:
             maximum = self.settings.max_upload_size_mb * 1024 * 1024 + 1024 * 1024
         elif method == "POST" and path == prefix + "/admin/site-content/images":
             maximum = 6 * 1024 * 1024
+        elif method == "POST" and path == prefix + "/admin/site-content/videos":
+            maximum = 101 * 1024 * 1024
         elif path.startswith(prefix + "/admin/blogs") and method in {"POST", "PUT"}:
             maximum = 1024 * 1024
         else:
