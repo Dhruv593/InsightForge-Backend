@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.analysis_constants import AnalysisRunStatus, MAX_CONVERSATION_CONTEXT_MESSAGES
+from app.core.logging_config import update_log_context
 from app.core.exceptions import (
     AgentExecutionError,
     AnalysisPlanInvalidError,
@@ -53,7 +54,7 @@ from app.services.dataset_file_service import DatasetFileDownloadError
 from app.services.dataset_loader_service import DatasetParseError, DatasetRowLimitError, UnsupportedDatasetStructureError
 from app.services.evidence_service import EvidencePersistenceError
 from app.services.statistical_validation_service import StatisticalValidationPersistenceError
-from app.services.stage9_service import Stage9Failure, Stage9Service
+from app.services.analysis_output_service import AnalysisOutputFailure, AnalysisOutputService
 from app.tools.analytics import ToolValidationError
 from app.tools.statistics import StatisticalToolError
 from app.agents.analyst import NumericGroundingError
@@ -96,7 +97,7 @@ class AnalysisExecutionService:
         self.profile_context_service = ProfileContextService()
         self.llm_service = llm_service or LLMService()
         self.task_execution = AnalysisTaskExecutionService(session, self.llm_service)
-        self.stage9 = Stage9Service(session, self.llm_service)
+        self.outputs = AnalysisOutputService(session, self.llm_service)
         self.workflow = workflow
 
     @traced("analysis.request")
@@ -106,6 +107,13 @@ class AnalysisExecutionService:
             raise AnalysisRunNotFoundError
         if run.status != AnalysisRunStatus.PENDING.value:
             raise AnalysisRunNotExecutableError
+
+        update_log_context(
+            analysis_run_id=run.id,
+            user_id=run.user_id,
+            conversation_id=run.conversation_id,
+            dataset_id=run.dataset_id,
+        )
 
         dataset, profile, conversation_context = await self._load_context(run, user)
         try:
@@ -161,12 +169,12 @@ class AnalysisExecutionService:
             return {"statistical_validations": validations}
 
         async def claim_executor(state: AnalysisState) -> dict[str, object]:
-            claims = await self.stage9.generate_fallback_claims(run=run, evidence=state.get("evidence") or [])
+            claims = await self.outputs.generate_fallback_claims(run=run, evidence=state.get("evidence") or [])
             return {"claims": claims}
 
         async def critic_executor(state: AnalysisState) -> dict[str, object]:
             try:
-                reviews, accepted = await self.stage9.review_claims(
+                reviews, accepted = await self.outputs.review_claims(
                     run=run,
                     claims=state.get("claims") or [],
                     evidence=state.get("evidence") or [],
@@ -174,35 +182,42 @@ class AnalysisExecutionService:
                     quality_warnings=profile_context.get("quality_issues") or [],
                     run_agent=run_agent,
                 )
-            except (StageAgentFailure, Stage9Failure) as exc:
+            except (StageAgentFailure, AnalysisOutputFailure) as exc:
                 await trace_event("critic_fallback", outcome="completed_with_fallback")
-                logger.warning("Using deterministic claim-review fallback analysis_run_id=%s reason=%s", run.id, getattr(exc, "internal_detail", None) or exc)
-                reviews, accepted = await self.stage9.accept_fallback_claims(run=run, claims=state.get("claims") or [])
+                logger.warning(
+                    "Using deterministic claim-review fallback error_code=%s error_type=%s",
+                    getattr(exc, "code", "CRITIC_EXECUTION_FAILED"),
+                    type(exc).__name__,
+                    extra={
+                        "event": "analysis.critic.fallback",
+                        "error_code": getattr(exc, "code", "CRITIC_EXECUTION_FAILED"),
+                        "error_type": type(exc).__name__,
+                    },
+                )
+                reviews, accepted = await self.outputs.accept_fallback_claims(run=run, claims=state.get("claims") or [])
             return {"claim_reviews": reviews, "accepted_claims": accepted}
 
         async def visualization_executor(state: AnalysisState) -> dict[str, object]:
             try:
-                charts = await self.stage9.create_charts(
+                charts = await self.outputs.create_charts(
                     run=run,
                     claims=state.get("accepted_claims") or [],
                     evidence=state.get("evidence") or [],
                     columns=profile_context.get("columns") or [],
                     run_agent=run_agent,
                 )
-            except (StageAgentFailure, Stage9Failure) as exc:
-                detail = getattr(exc, "internal_detail", None) or getattr(exc, "detail", None) or str(exc)
+            except (StageAgentFailure, AnalysisOutputFailure) as exc:
                 logger.warning(
-                    "Visualization skipped analysis_run_id=%s error_code=%s reason=%s",
-                    run.id,
+                    "Visualization fallback selected error_code=%s error_type=%s",
                     getattr(exc, "code", "VISUALIZATION_FAILED"),
-                    detail,
+                    type(exc).__name__,
                     extra={
-                        "analysis_run_id": str(run.id),
+                        "event": "analysis.visualization.fallback",
                         "error_code": getattr(exc, "code", "VISUALIZATION_FAILED"),
-                        "validation_reason": detail,
+                        "error_type": type(exc).__name__,
                     },
                 )
-                charts = await self.stage9.create_fallback_charts(
+                charts = await self.outputs.create_fallback_charts(
                     run=run,
                     claims=state.get("accepted_claims") or [],
                     evidence=state.get("evidence") or [],
@@ -241,16 +256,15 @@ class AnalysisExecutionService:
             return await self._complete(run, result)
         except StageAgentFailure as exc:
             logger.error(
-                "Analysis stage failed analysis_run_id=%s provider=%s error_code=%s reason=%s",
-                run_id,
+                "Analysis stage failed provider=%s error_code=%s error_type=%s",
                 run_provider,
                 exc.code,
-                exc.internal_detail or exc.safe_message,
+                type(exc).__name__,
                 extra={
-                    "analysis_run_id": str(run_id),
+                    "event": "analysis.run.failed",
                     "provider": run_provider,
                     "error_code": exc.code,
-                    "validation_reason": exc.internal_detail,
+                    "error_type": type(exc).__name__,
                 },
             )
             await self._fail_run(run_id, exc.code, exc.safe_message)
@@ -267,7 +281,7 @@ class AnalysisExecutionService:
         except AnalysisPlanPersistenceError as exc:
             await self._fail_run(run_id, exc.code, exc.message)
             raise
-        except Stage9Failure as exc:
+        except AnalysisOutputFailure as exc:
             message = AnalysisToolError._MESSAGES[exc.code]
             await self._fail_run(run_id, exc.code, message)
             raise AnalysisToolError(exc.code) from exc
@@ -276,16 +290,15 @@ class AnalysisExecutionService:
             if isinstance(exc, ToolValidationError): code = "ANALYSIS_TOOL_VALIDATION_FAILED"
             if isinstance(exc, StatisticalToolError): code = "STATISTICAL_TEST_FAILED"
             logger.error(
-                "Analysis operation failed analysis_run_id=%s provider=%s error_code=%s reason=%s",
-                run_id,
+                "Analysis operation failed provider=%s error_code=%s error_type=%s",
                 run_provider,
                 code,
-                getattr(exc, "detail", None) or str(exc),
+                type(exc).__name__,
                 extra={
-                    "analysis_run_id": str(run_id),
+                    "event": "analysis.run.failed",
                     "provider": run_provider,
                     "error_code": code,
-                    "validation_reason": getattr(exc, "detail", None) or str(exc),
+                    "error_type": type(exc).__name__,
                 },
             )
             await self._fail_run(run_id, code, AnalysisToolError._MESSAGES[code])
@@ -313,14 +326,14 @@ class AnalysisExecutionService:
         }
         if inputs["claims"]:
             try:
-                return await self.stage9.create_report(
+                return await self.outputs.create_report(
                     **inputs,
                     charts=state.get("chart_specs") or [],
                     run_agent=run_agent,
                 )
-            except (StageAgentFailure, Stage9Failure) as exc:
+            except (StageAgentFailure, AnalysisOutputFailure) as exc:
                 # Persistence failures belong to global recovery; do not retry a write.
-                if isinstance(exc, Stage9Failure) and exc.code != "REPORT_VALIDATION_FAILED":
+                if isinstance(exc, AnalysisOutputFailure) and exc.code != "REPORT_VALIDATION_FAILED":
                     raise
                 logger.warning(
                     "Using evidence-based report fallback analysis_run_id=%s provider=%s error_code=%s",
@@ -331,7 +344,7 @@ class AnalysisExecutionService:
         else:
             # No reviewed findings means there is no grounded input for the report agent.
             await trace_event("report_without_accepted_claims", outcome="partial")
-        return await self.stage9.create_fallback_report(**inputs)
+        return await self.outputs.create_fallback_report(**inputs)
 
     async def list_agent_runs(self, analysis_run_id: UUID, user: User) -> list[AgentRun]:
         run = await self.runs.get_by_id_for_user(analysis_run_id, user.id)
@@ -346,10 +359,10 @@ class AnalysisExecutionService:
         run = await self.session.get(AnalysisRun, run_id)
         if run is None:
             raise AnalysisRunNotFoundError
-        saved = await self.stage9.reports.get_for_run(run_id)
+        saved = await self.outputs.reports.get_for_run(run_id)
         findings = []
         notes = list(getattr(getattr(self, "task_execution", None), "warnings", []))
-        for claim in await self.stage9.claims.list_for_run(run_id):
+        for claim in await self.outputs.claims.list_for_run(run_id):
             if claim.status != "accepted" or claim.claim_type != "descriptive":
                 continue
             refs = [item.evidence_code for item in claim.evidence_items]
@@ -361,7 +374,7 @@ class AnalysisExecutionService:
         payload = recovery_report(profile_context, findings, notes)
         if not findings and saved is None:
             # Only display raw calculated values, never an unreviewed model interpretation.
-            evidence = await self.stage9.evidence_repo.list_for_run(run_id)
+            evidence = await self.outputs.evidence_repo.list_for_run(run_id)
             from types import SimpleNamespace
             from app.agents.analyst import AnalystAgent
             for item in evidence:
@@ -379,9 +392,9 @@ class AnalysisExecutionService:
             saved.report = payload
         else:
             saved = Report(analysis_run_id=run_id, report=payload, **payload)
-            await self.stage9.reports.create(saved)
+            await self.outputs.reports.create(saved)
         # Do not persist an incomplete plan again during response completion.
-        return await self._complete(run, {"assistant_message": self.stage9.format_report(payload)})
+        return await self._complete(run, {"assistant_message": self.outputs.format_report(payload)})
 
     async def get_plan(self, analysis_run_id: UUID, user: User) -> AnalysisPlan:
         return await self.plan_service.get_for_run(analysis_run_id, user.id)
@@ -393,13 +406,13 @@ class AnalysisExecutionService:
         return await self.task_execution.stat_service.list_owned(analysis_run_id, user.id)
 
     async def list_claims(self, analysis_run_id: UUID, user: User):
-        return await self.stage9.list_claims_owned(analysis_run_id, user.id)
+        return await self.outputs.list_claims_owned(analysis_run_id, user.id)
 
     async def list_charts(self, analysis_run_id: UUID, user: User):
-        return await self.stage9.list_charts_owned(analysis_run_id, user.id)
+        return await self.outputs.list_charts_owned(analysis_run_id, user.id)
 
     async def get_report(self, analysis_run_id: UUID, user: User):
-        return await self.stage9.get_report_owned(analysis_run_id, user.id)
+        return await self.outputs.get_report_owned(analysis_run_id, user.id)
 
     @traced("agent")
     async def _run_agent(
@@ -448,6 +461,14 @@ class AnalysisExecutionService:
             logger.info(
                 "Agent completed analysis_run_id=%s agent_run_id=%s agent_name=%s provider=%s model=%s status=completed latency_ms=%s",
                 run_id, agent_run_id, agent_name, run_provider, model_name, result.latency_ms,
+                extra={
+                    "event": "analysis.agent.completed",
+                    "agent_run_id": str(agent_run_id),
+                    "agent_name": agent_name,
+                    "provider": run_provider,
+                    "model": model_name,
+                    "latency_ms": result.latency_ms,
+                },
             )
             return result
         except Exception as exc:
@@ -464,9 +485,10 @@ class AnalysisExecutionService:
                 await self.session.commit()
             await self.session.refresh(run)
             logger.warning(
-                "Agent failed analysis_run_id=%s agent_run_id=%s agent_name=%s provider=%s model=%s status=failed error_code=%s reason=%s",
-                run_id, agent_run_id, agent_name, run_provider, model_name, code, self._internal_error_detail(exc),
+                "Agent failed analysis_run_id=%s agent_run_id=%s agent_name=%s provider=%s model=%s status=failed error_code=%s error_type=%s",
+                run_id, agent_run_id, agent_name, run_provider, model_name, code, type(exc).__name__,
                 extra={
+                    "event": "analysis.agent.failed",
                     "analysis_run_id": str(run_id),
                     "agent_run_id": str(agent_run_id),
                     "agent_name": agent_name,
@@ -474,7 +496,6 @@ class AnalysisExecutionService:
                     "model": model_name,
                     "error_code": code,
                     "error_type": type(exc).__name__,
-                    "validation_reason": self._internal_error_detail(exc),
                 },
             )
             raise StageAgentFailure(code, message, self._internal_error_detail(exc)) from exc
@@ -493,7 +514,7 @@ class AnalysisExecutionService:
             return exc.code, exc.safe_message
         if isinstance(exc, AgentSemanticValidationError):
             return exc.code, exc.safe_message
-        if isinstance(exc, Stage9Failure):
+        if isinstance(exc, AnalysisOutputFailure):
             return exc.code, AnalysisToolError._MESSAGES[exc.code]
         if isinstance(exc, (ToolValidationError, NumericGroundingError)):
             return "ANALYSIS_TOOL_VALIDATION_FAILED", AnalysisToolError._MESSAGES["ANALYSIS_TOOL_VALIDATION_FAILED"]
@@ -562,6 +583,19 @@ class AnalysisExecutionService:
             await self.session.commit()
             await self.session.refresh(run)
             await self.session.refresh(message)
+            duration_ms = None
+            if run.started_at is not None:
+                duration_ms = round((completed_at - run.started_at).total_seconds() * 1000, 2)
+            logger.info(
+                "Analysis completed remaining_credits=%s duration_ms=%s",
+                remaining_credits,
+                duration_ms,
+                extra={
+                    "event": "analysis.run.completed",
+                    "remaining_credits": remaining_credits,
+                    "duration_ms": duration_ms,
+                },
+            )
             return run, message
         except Exception:
             await self.session.rollback()

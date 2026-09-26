@@ -64,10 +64,10 @@ async def test_recovery_saves_report_and_excludes_rejected_and_statistical_claim
     accepted = SimpleNamespace(status='accepted', claim_type='descriptive', claim_code='C1', claim_text='North: 100', review=None, evidence_items=[SimpleNamespace(evidence_code='E1', limitations=['Limited period'])])
     rejected = SimpleNamespace(status='rejected')
     statistical = SimpleNamespace(status='accepted', claim_type='statistical')
-    service.stage9 = SimpleNamespace(reports=SimpleNamespace(get_for_run=AsyncMock(return_value=None), create=AsyncMock()), claims=SimpleNamespace(list_for_run=AsyncMock(return_value=[accepted, rejected, statistical])), format_report=lambda payload: payload['executive_summary'])
+    service.outputs = SimpleNamespace(reports=SimpleNamespace(get_for_run=AsyncMock(return_value=None), create=AsyncMock()), claims=SimpleNamespace(list_for_run=AsyncMock(return_value=[accepted, rejected, statistical])), format_report=lambda payload: payload['executive_summary'])
     service._complete = AsyncMock(return_value=('run', 'message'))
     assert await service._recover_response(run.id, {}) == ('run', 'message')
-    report = service.stage9.reports.create.call_args.args[0]
+    report = service.outputs.reports.create.call_args.args[0]
     assert [finding['claim_code'] for finding in report.key_findings] == ['C1']
     assert report.statistical_findings == []
     assert 'Limited period' in report.limitations
@@ -80,7 +80,7 @@ async def test_recovery_reuses_report_instead_of_creating_duplicate():
     run = SimpleNamespace(id=uuid4())
     saved = SimpleNamespace(report=recovery_report({}, []))
     service.session = SimpleNamespace(rollback=AsyncMock(), get=AsyncMock(return_value=run))
-    service.stage9 = SimpleNamespace(reports=SimpleNamespace(get_for_run=AsyncMock(return_value=saved), create=AsyncMock()), claims=SimpleNamespace(list_for_run=AsyncMock(return_value=[])), format_report=lambda payload: payload['executive_summary'])
+    service.outputs = SimpleNamespace(reports=SimpleNamespace(get_for_run=AsyncMock(return_value=saved), create=AsyncMock()), claims=SimpleNamespace(list_for_run=AsyncMock(return_value=[])), format_report=lambda payload: payload['executive_summary'])
     service._complete = AsyncMock()
     await service._recover_response(run.id, {})
-    service.stage9.reports.create.assert_not_awaited()
+    service.outputs.reports.create.assert_not_awaited()

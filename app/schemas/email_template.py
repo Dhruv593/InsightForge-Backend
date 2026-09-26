@@ -19,6 +19,7 @@ TEMPLATE_VARIABLES: dict[str, tuple[str, ...]] = {
         "{{new_balance}}", "{{adjustment_reason}}",
     ),
     "account_deleted": ("{{user_name}}", "{{deleted_at}}", "{{support_email}}"),
+    "contact_reply": ("{{contact_name}}", "{{original_subject}}", "{{reply_message}}"),
 }
 
 
@@ -52,12 +53,13 @@ class EmailTemplatesContent(BaseModel):
     payment_confirmation: EmailTemplateContent
     credit_adjusted: EmailTemplateContent
     account_deleted: EmailTemplateContent
+    contact_reply: EmailTemplateContent
 
     @model_validator(mode="after")
     def preserve_template_variables(self):
         for template_name, required in TEMPLATE_VARIABLES.items():
             template = getattr(self, template_name)
-            if template_name != "account_deleted" and not (template.action_label or "").strip():
+            if template_name not in {"account_deleted", "contact_reply"} and not (template.action_label or "").strip():
                 raise ValueError(f"{template_name} must keep a button label")
             editable_text = "\n".join(
                 [

@@ -14,6 +14,7 @@ from app.schemas.site_content import BlogContent, BlogDetailResponse, BlogListRe
 from app.services.cloudinary_service import CloudinaryService, CloudinaryUploadError
 from app.services.email_service import EmailDeliveryUnavailable, EmailService
 from app.services.site_content_service import DEFAULT_LEGAL_CONTENT, DEFAULT_PLANS_CONTENT, SiteContentService
+from app.services.contact_inquiry_service import ContactInquiryService
 from app.core.config import get_settings
 
 router = APIRouter(tags=["site-content"])
@@ -26,6 +27,10 @@ MAX_CONTENT_VIDEO_BYTES = 100 * 1024 * 1024
 
 def service(session: Annotated[AsyncSession, Depends(get_db_session)]) -> SiteContentService:
     return SiteContentService(session)
+
+
+def contact_service(session: Annotated[AsyncSession, Depends(get_db_session)]) -> ContactInquiryService:
+    return ContactInquiryService(session)
 
 
 def _response(entry) -> LandingContentResponse:
@@ -64,7 +69,12 @@ def _legal_response(entry) -> LegalPagesResponse:
 
 
 def _email_templates_response(entry) -> EmailTemplatesResponse:
-    content = DEFAULT_EMAIL_TEMPLATES if entry is None else EmailTemplatesContent.model_validate(entry.content)
+    if entry is None:
+        content = DEFAULT_EMAIL_TEMPLATES
+    else:
+        merged = DEFAULT_EMAIL_TEMPLATES.model_dump(mode="python")
+        merged.update(entry.content)
+        content = EmailTemplatesContent.model_validate(merged)
     return EmailTemplatesResponse(
         content=content,
         variables={name: list(values) for name, values in TEMPLATE_VARIABLES.items()},
@@ -114,7 +124,11 @@ async def update_landing(payload: LandingContentUpdate, user: AdminUser, content
 
 
 @router.post("/site-content/contact", response_model=ContactResponse)
-async def submit_contact(payload: ContactRequest, content: Annotated[SiteContentService, Depends(service)]) -> ContactResponse:
+async def submit_contact(
+    payload: ContactRequest,
+    content: Annotated[SiteContentService, Depends(service)],
+    inquiries: Annotated[ContactInquiryService, Depends(contact_service)],
+) -> ContactResponse:
     entry = await content.get_landing(published_only=True)
     landing = LandingPageContent.model_validate(entry.content) if entry is not None else None
     if landing is not None and not landing.contact.enabled:
@@ -122,10 +136,13 @@ async def submit_contact(payload: ContactRequest, content: Annotated[SiteContent
     success_message = landing.contact.success_message if landing is not None else "Thanks — your message has been sent."
     if payload.website:
         return ContactResponse(message=success_message)
+    inquiry = await inquiries.create(payload)
     settings = get_settings()
     recipient = str(landing.contact.recipient_email) if landing is not None else (settings.support_email.strip() or settings.smtp_from_email.strip())
     if not recipient:
-        raise AppError("CONTACT_NOT_CONFIGURED", "Contact delivery is not configured yet.", 503)
+        await inquiries.record_notification(inquiry, "not_configured")
+        logger.warning("Contact notification recipient is not configured inquiry_id=%s", inquiry.id, extra={"event": "contact.notification.not_configured", "inquiry_id": str(inquiry.id)})
+        return ContactResponse(message=success_message)
     subject = payload.subject or "Landing page enquiry"
     body = f"Name: {payload.name}\nEmail: {payload.email}\nSubject: {subject}\n\n{payload.message}"
     try:
@@ -136,10 +153,13 @@ async def submit_contact(payload: ContactRequest, content: Annotated[SiteContent
             reply_to=str(payload.email),
         )
     except EmailDeliveryUnavailable as exc:
-        raise AppError("CONTACT_DELIVERY_NOT_CONFIGURED", "Contact delivery is not configured yet.", 503) from exc
+        await inquiries.record_notification(inquiry, "not_configured")
+        logger.warning("Contact notification email is not configured inquiry_id=%s", inquiry.id, extra={"event": "contact.notification.not_configured", "inquiry_id": str(inquiry.id)})
     except Exception as exc:
-        logger.exception("Contact message delivery failed")
-        raise AppError("CONTACT_DELIVERY_FAILED", "Your message could not be sent. Please try again later.", 502) from exc
+        await inquiries.record_notification(inquiry, "failed")
+        logger.exception("Contact notification delivery failed inquiry_id=%s", inquiry.id, extra={"event": "contact.notification.failed", "inquiry_id": str(inquiry.id)})
+    else:
+        await inquiries.record_notification(inquiry, "sent")
     return ContactResponse(message=success_message)
 
 

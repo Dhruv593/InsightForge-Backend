@@ -1,5 +1,5 @@
 from app.core.tracing import traced
-from app.services.revenue_recommendations import revenue_recommendations
+from app.services.deterministic_recommendations import deterministic_recommendations
 
 from collections.abc import Awaitable, Callable
 import logging
@@ -35,14 +35,13 @@ VISUAL_REQUEST_PATTERN = re.compile(r"\b(chart|graph|plot|visuali[sz](?:e|ation)
 logger = logging.getLogger(__name__)
 
 
-class Stage9Failure(Exception):
+class AnalysisOutputFailure(Exception):
     def __init__(self, code: str, detail: str | None = None) -> None:
         self.code = code
         self.detail = detail
         super().__init__(f"{code}: {detail}" if detail else code)
 
-
-class Stage9Service:
+class AnalysisOutputService:
     def __init__(self, session, llm_service) -> None:
         self.session = session
         self.runs = AnalysisRunRepository(session)
@@ -63,23 +62,23 @@ class Stage9Service:
         try:
             output = ClaimGenerationOutput.model_validate(result.content)
         except ValidationError as exc:
-            raise Stage9Failure("CLAIM_VALIDATION_FAILED") from exc
+            raise AnalysisOutputFailure("CLAIM_VALIDATION_FAILED") from exc
         evidence_map = {item["evidence_code"]: item for item in evidence}
         codes = [item.claim_code for item in output.claims]
         if not output.claims or len(output.claims) > MAX_CLAIMS_PER_RUN or len(codes) != len(set(codes)):
-            raise Stage9Failure("CLAIM_VALIDATION_FAILED")
+            raise AnalysisOutputFailure("CLAIM_VALIDATION_FAILED")
         persisted_evidence = {item.evidence_code: item for item in await self.evidence_repo.list_for_run(run.id)}
         models: list[Claim] = []
         dto: list[dict[str, Any]] = []
         for candidate in output.claims:
             refs = candidate.evidence_codes
             if any(code not in evidence_map or code not in persisted_evidence for code in refs) or (candidate.claim_type != "limitation" and not refs):
-                raise Stage9Failure("CLAIM_VALIDATION_FAILED")
+                raise AnalysisOutputFailure("CLAIM_VALIDATION_FAILED")
             linked_stats = [item for item in validations if item.get("evidence_code") in refs]
             try:
                 AnalystAgent._validate_numeric_grounding(candidate.claim_text, {"evidence": [evidence_map[code] for code in refs], "statistics": linked_stats})
             except NumericGroundingError as exc:
-                raise Stage9Failure("CLAIM_VALIDATION_FAILED") from exc
+                raise AnalysisOutputFailure("CLAIM_VALIDATION_FAILED") from exc
             model = Claim(analysis_run_id=run.id, claim_code=candidate.claim_code, claim_text=candidate.claim_text, claim_type=candidate.claim_type, status="pending_review")
             model.evidence_items = [persisted_evidence[code] for code in refs]
             models.append(model)
@@ -87,7 +86,7 @@ class Stage9Service:
         try:
             await self.claims.create_many(models); await self.session.commit()
         except Exception as exc:
-            await self.session.rollback(); raise Stage9Failure("CLAIM_PERSISTENCE_FAILED") from exc
+            await self.session.rollback(); raise AnalysisOutputFailure("CLAIM_PERSISTENCE_FAILED") from exc
         self.claim_models = {model.claim_code: model for model in models}
         return dto
 
@@ -106,11 +105,11 @@ class Stage9Service:
             models.append(model)
             dto.append({"claim_code": claim_code, "claim_text": text, "claim_type": "descriptive", "evidence_codes": [code], "status": "pending_review"})
         if not models:
-            raise Stage9Failure("CLAIM_GENERATION_FAILED", "No persisted evidence was available for deterministic claim fallback.")
+            raise AnalysisOutputFailure("CLAIM_GENERATION_FAILED", "No persisted evidence was available for deterministic claim fallback.")
         try:
             await self.claims.create_many(models); await self.session.commit()
         except Exception as exc:
-            await self.session.rollback(); raise Stage9Failure("CLAIM_PERSISTENCE_FAILED") from exc
+            await self.session.rollback(); raise AnalysisOutputFailure("CLAIM_PERSISTENCE_FAILED") from exc
         self.claim_models = {model.claim_code: model for model in models}
         return dto
 
@@ -128,18 +127,18 @@ class Stage9Service:
             try:
                 evaluation = ClaimEvaluation.model_validate(result.content)
             except ValidationError as exc:
-                raise Stage9Failure("CRITIC_VALIDATION_FAILED") from exc
+                raise AnalysisOutputFailure("CRITIC_VALIDATION_FAILED") from exc
             if evaluation.claim_code != claim["claim_code"]:
-                raise Stage9Failure("CRITIC_VALIDATION_FAILED")
+                raise AnalysisOutputFailure("CRITIC_VALIDATION_FAILED")
             wording = evaluation.corrected_wording or claim["claim_text"]
             try:
                 AnalystAgent._validate_numeric_grounding(wording, {"evidence": linked, "statistics": linked_stats})
             except NumericGroundingError as exc:
-                raise Stage9Failure("CRITIC_VALIDATION_FAILED") from exc
+                raise AnalysisOutputFailure("CRITIC_VALIDATION_FAILED") from exc
             if evaluation.status == "accepted" and CAUSAL_PATTERN.search(wording) and any(item.get("method") in {"calculate_correlation", "pearson", "spearman"} for item in [*linked, *linked_stats]):
-                raise Stage9Failure("CRITIC_VALIDATION_FAILED")
+                raise AnalysisOutputFailure("CRITIC_VALIDATION_FAILED")
             if evaluation.status == "accepted" and re.search(r"\bsignificant\b", wording, re.IGNORECASE) and any(item.get("is_significant") for item in linked_stats) and not any(item.get("effect_size") is not None for item in linked_stats):
-                raise Stage9Failure("CRITIC_VALIDATION_FAILED")
+                raise AnalysisOutputFailure("CRITIC_VALIDATION_FAILED")
             model = self.claim_models[claim["claim_code"]]
             review = ClaimReview(claim_id=model.id, analysis_run_id=run.id, status=evaluation.status, evidence_strength=evaluation.evidence_strength, issues=evaluation.issues, missing_analysis=evaluation.missing_analysis, corrected_wording=evaluation.corrected_wording)
             review_models.append(review)
@@ -152,7 +151,7 @@ class Stage9Service:
             await self.session.commit()
         except Exception as exc:
             await self.session.rollback()
-            raise Stage9Failure("CRITIC_VALIDATION_FAILED") from exc
+            raise AnalysisOutputFailure("CRITIC_VALIDATION_FAILED") from exc
         return reviews, accepted
 
     @traced("fallback.review")
@@ -170,7 +169,7 @@ class Stage9Service:
         try:
             self.session.add_all(models); await self.session.flush(); await self.session.commit()
         except Exception as exc:
-            await self.session.rollback(); raise Stage9Failure("CRITIC_VALIDATION_FAILED") from exc
+            await self.session.rollback(); raise AnalysisOutputFailure("CRITIC_VALIDATION_FAILED") from exc
         return reviews, accepted
 
     async def create_charts(self, *, run, claims: list[dict[str, Any]], evidence: list[dict[str, Any]], columns: list[dict[str, Any]], run_agent: AgentRunner) -> list[dict[str, Any]]:
@@ -181,7 +180,7 @@ class Stage9Service:
         try:
             output = VisualizationOutput.model_validate(result.content)
         except ValidationError as exc:
-            raise Stage9Failure("CHART_SPEC_INVALID", f"Visualization response schema failed: {exc}") from exc
+            raise AnalysisOutputFailure("CHART_SPEC_INVALID", f"Visualization response schema failed: {exc}") from exc
         requested = [item for item in output.charts if item.needed]
         # Apply data-aware defaults even when the model habitually requests a bar.
         if not re.search(r'\b(pie|donut|bar|line|scatter|histogram|boxplot|heatmap|waterfall)\b', run.query, re.I):
@@ -244,9 +243,9 @@ class Stage9Service:
         for item in requested:
             refs = item.evidence_codes
             if item.chart_type not in SUPPORTED_CHART_TYPES:
-                raise Stage9Failure("CHART_SPEC_INVALID", f"Unsupported chart type '{item.chart_type}'.")
+                raise AnalysisOutputFailure("CHART_SPEC_INVALID", f"Unsupported chart type '{item.chart_type}'.")
             if not refs or any(code not in evidence_map for code in refs):
-                raise Stage9Failure("CHART_SPEC_INVALID", f"Chart references unavailable evidence codes: {refs}.")
+                raise AnalysisOutputFailure("CHART_SPEC_INVALID", f"Chart references unavailable evidence codes: {refs}.")
             # 'value' is an aggregation result alias, not necessarily a dataset column.
             if item.y_column == "value" and "value" not in column_names:
                 metrics = {(evidence_map[code].get("operation") or {}).get("metric") for code in refs}
@@ -255,13 +254,13 @@ class Stage9Service:
                     logger.info("Resolved chart metric alias analysis_run_id=%s metric=%s", run.id, item.y_column)
             unknown_axes = [value for value in (item.x_column, item.y_column, item.group_column) if value and value not in column_names]
             if unknown_axes:
-                raise Stage9Failure("CHART_SPEC_INVALID", f"Chart references unknown dataset columns: {unknown_axes}.")
+                raise AnalysisOutputFailure("CHART_SPEC_INVALID", f"Chart references unknown dataset columns: {unknown_axes}.")
             if item.chart_type in {"line", "bar", "horizontal_bar", "scatter", "pie", "donut", "waterfall"} and (not item.x_column or not item.y_column):
-                raise Stage9Failure("CHART_SPEC_INVALID", f"Chart type '{item.chart_type}' requires x_column and y_column.")
+                raise AnalysisOutputFailure("CHART_SPEC_INVALID", f"Chart type '{item.chart_type}' requires x_column and y_column.")
             if item.chart_type in {"grouped_bar", "stacked_bar", "heatmap"} and (not item.x_column or not item.y_column or not item.group_column):
-                raise Stage9Failure("CHART_SPEC_INVALID", f"Chart type '{item.chart_type}' requires x_column, y_column, and group_column.")
+                raise AnalysisOutputFailure("CHART_SPEC_INVALID", f"Chart type '{item.chart_type}' requires x_column, y_column, and group_column.")
             if item.chart_type in {"histogram", "boxplot"} and not (item.x_column or item.y_column):
-                raise Stage9Failure("CHART_SPEC_INVALID", f"Chart type '{item.chart_type}' requires a numeric axis.")
+                raise AnalysisOutputFailure("CHART_SPEC_INVALID", f"Chart type '{item.chart_type}' requires a numeric axis.")
             config = self._chart_data(item.model_dump(mode="json"), [evidence_map[code] for code in refs])
             filters = [condition for code in refs for condition in evidence_map[code].get("filters", [])]
             signature = self._chart_signature(item, config, filters, [evidence_map[code] for code in refs])
@@ -276,7 +275,7 @@ class Stage9Service:
             models.append(model); dto.append({"chart_code": chart_code, **item.model_dump(mode="json"), "chart_config": config, "filters": filters})
         if models:
             try: await self.charts.create_many(models); await self.session.commit()
-            except Exception as exc: await self.session.rollback(); raise Stage9Failure("VISUALIZATION_FAILED") from exc
+            except Exception as exc: await self.session.rollback(); raise AnalysisOutputFailure("VISUALIZATION_FAILED") from exc
         logger.info("Charts finalized analysis_run_id=%s candidate_count=%s saved_count=%s", run.id, len(requested), len(models))
         return dto
 
@@ -391,32 +390,32 @@ class Stage9Service:
         try:
             report = FinalReportOutput.model_validate(result.content)
         except ValidationError as exc:
-            raise Stage9Failure("REPORT_VALIDATION_FAILED") from exc
+            raise AnalysisOutputFailure("REPORT_VALIDATION_FAILED") from exc
         claim_map = {item["claim_code"]: item for item in claims}
         evidence_map = {item["evidence_code"]: item for item in relevant_evidence}
         if claims and not report.key_findings:
-            raise Stage9Failure("REPORT_VALIDATION_FAILED", "The report omitted the accepted findings.")
+            raise AnalysisOutputFailure("REPORT_VALIDATION_FAILED", "The report omitted the accepted findings.")
         for finding in report.key_findings:
             if finding.claim_code not in accepted_codes or any(code not in evidence_map or code not in claim_map[finding.claim_code]["evidence_codes"] for code in finding.evidence_codes):
-                raise Stage9Failure("REPORT_VALIDATION_FAILED")
+                raise AnalysisOutputFailure("REPORT_VALIDATION_FAILED")
             try:
                 AnalystAgent._validate_numeric_grounding(finding.finding, {
                     "evidence": [evidence_map[code] for code in finding.evidence_codes],
                     "statistics": [item for item in relevant_stats if item.get("evidence_code") in finding.evidence_codes],
                 })
             except NumericGroundingError as exc:
-                raise Stage9Failure("REPORT_VALIDATION_FAILED", "A finding introduced a value outside its linked evidence.") from exc
+                raise AnalysisOutputFailure("REPORT_VALIDATION_FAILED", "A finding introduced a value outside its linked evidence.") from exc
         grounding = {"evidence": relevant_evidence, "statistics": relevant_stats, "quality": quality_warnings}
         texts = [report.executive_summary, *[item.finding for item in report.key_findings], *report.statistical_findings, *report.recommendations]
         try:
             for text in texts:
                 AnalystAgent._validate_numeric_grounding(text, grounding)
         except NumericGroundingError as exc:
-            raise Stage9Failure("REPORT_VALIDATION_FAILED") from exc
+            raise AnalysisOutputFailure("REPORT_VALIDATION_FAILED") from exc
         payload = report.model_dump(mode="json")
         model = Report(analysis_run_id=run.id, executive_summary=report.executive_summary, key_findings=payload["key_findings"], statistical_findings=report.statistical_findings, data_notes=report.data_notes, limitations=report.limitations, recommendations=report.recommendations, report=payload)
         try: await self.reports.create(model); await self.session.commit()
-        except Exception as exc: await self.session.rollback(); raise Stage9Failure("REPORT_PERSISTENCE_FAILED") from exc
+        except Exception as exc: await self.session.rollback(); raise AnalysisOutputFailure("REPORT_PERSISTENCE_FAILED") from exc
         return payload
 
     @traced("fallback.report")
@@ -431,13 +430,13 @@ class Stage9Service:
             statistical_findings=[item["interpretation"] for item in validations if item.get("interpretation")],
             data_notes=[item["message"] for item in quality_warnings if item.get("message")],
             limitations=list(dict.fromkeys([warning for item in evidence for warning in item.get("limitations", [])] + ["This report was assembled deterministically from saved evidence and accepted claims."])),
-            recommendations=revenue_recommendations(evidence),
+            recommendations=deterministic_recommendations(evidence),
         ).model_dump(mode="json")
         model = Report(analysis_run_id=run.id, executive_summary=payload["executive_summary"], key_findings=payload["key_findings"], statistical_findings=payload["statistical_findings"], data_notes=payload["data_notes"], limitations=payload["limitations"], recommendations=payload["recommendations"], report=payload)
         try:
             await self.reports.create(model); await self.session.commit()
         except Exception as exc:
-            await self.session.rollback(); raise Stage9Failure("REPORT_PERSISTENCE_FAILED") from exc
+            await self.session.rollback(); raise AnalysisOutputFailure("REPORT_PERSISTENCE_FAILED") from exc
         return payload
 
     @staticmethod
@@ -454,7 +453,7 @@ class Stage9Service:
         records = result.get("contributions") if isinstance(result, dict) and isinstance(result.get("contributions"), list) else result if isinstance(result, list) else None
         chart_type = spec["chart_type"]
         if not records or not all(isinstance(row, dict) for row in records):
-            raise Stage9Failure("CHART_SPEC_INVALID", "Supporting evidence does not contain chartable record rows.")
+            raise AnalysisOutputFailure("CHART_SPEC_INVALID", "Supporting evidence does not contain chartable record rows.")
         keys = list(records[0])
         x_key = spec.get("x_column") if spec.get("x_column") in keys else next((key for key in keys if not isinstance(records[0].get(key), (int, float))), None)
         preferred_y = "change" if chart_type == "waterfall" and "change" in keys else "value" if "value" in keys else None
@@ -463,17 +462,17 @@ class Stage9Service:
             value_key = y_key or x_key
             values = [row.get(value_key) for row in records if isinstance(row.get(value_key), (int, float))]
             if not values:
-                raise Stage9Failure("CHART_SPEC_INVALID", "Supporting evidence contains no numeric values for the distribution chart.")
+                raise AnalysisOutputFailure("CHART_SPEC_INVALID", "Supporting evidence contains no numeric values for the distribution chart.")
             return {"values": values, "value_column": value_key}
         if not x_key or not y_key:
-            raise Stage9Failure("CHART_SPEC_INVALID", f"Could not map chart axes to evidence fields: {keys}.")
+            raise AnalysisOutputFailure("CHART_SPEC_INVALID", f"Could not map chart axes to evidence fields: {keys}.")
         group_key = spec.get("group_column")
         if chart_type == "heatmap" and group_key in keys and group_key != x_key:
             x_values = list(dict.fromkeys(row.get(x_key) for row in records))
             group_values = list(dict.fromkeys(row.get(group_key) for row in records))
             lookup = {(row.get(x_key), row.get(group_key)): row.get(y_key) for row in records}
             if not all(value is None or isinstance(value, (int, float)) for value in lookup.values()):
-                raise Stage9Failure("CHART_SPEC_INVALID")
+                raise AnalysisOutputFailure("CHART_SPEC_INVALID")
             return {"x": x_values, "y": group_values, "z": [[lookup.get((x_value, group_value)) for x_value in x_values] for group_value in group_values], "x_column": x_key, "y_column": y_key, "group_column": group_key}
         if group_key in keys and group_key != x_key and chart_type in {"grouped_bar", "stacked_bar", "line"}:
             groups: dict[str, list[dict[str, Any]]] = {}
@@ -482,7 +481,7 @@ class Stage9Service:
             return {"series": [{"name": name, "labels": [row.get(x_key) for row in rows], "values": [row.get(y_key) for row in rows]} for name, rows in groups.items()], "x_column": x_key, "y_column": y_key, "group_column": group_key}
         x, y = [row.get(x_key) for row in records], [row.get(y_key) for row in records]
         if not all(isinstance(value, (int, float)) for value in y):
-            raise Stage9Failure("CHART_SPEC_INVALID", f"Evidence field '{y_key}' contains non-numeric chart values.")
+            raise AnalysisOutputFailure("CHART_SPEC_INVALID", f"Evidence field '{y_key}' contains non-numeric chart values.")
         return {"labels": x, "values": y, "x_column": x_key, "y_column": y_key}
 
     async def list_claims_owned(self, run_id: UUID, user_id: UUID):

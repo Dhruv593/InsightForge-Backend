@@ -1,0 +1,99 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Tatparya Agent Orchestration",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "output": "tatparya-agent-flow.html"
+  },
+  "lanes": [
+    { "id": "intake", "label": "Request Intake" },
+    { "id": "grounding", "label": "Grounding & Execution" },
+    { "id": "assurance", "label": "Evidence Assurance" },
+    { "id": "delivery", "label": "Presentation & Delivery" },
+    { "id": "recovery", "label": "Fallback & Recovery", "variant": "exception" }
+  ],
+  "phases": [
+    { "id": "understand", "label": "Understand", "fromCol": 0, "toCol": 2 },
+    { "id": "calculate", "label": "Ground + calculate", "fromCol": 3, "toCol": 5, "variant": "emphasis" }
+  ],
+  "groups": [
+    { "id": "llm_grounding", "label": "Validated LLM reasoning", "lane": "grounding", "fromCol": 3, "toCol": 4, "variant": "emphasis" },
+    { "id": "evidence_review", "label": "Evidence-backed review", "lane": "assurance", "fromCol": 0, "toCol": 2, "variant": "dashed" },
+    { "id": "recovery_path", "label": "Recover from committed artifacts", "lane": "recovery", "fromCol": 5, "toCol": 5, "variant": "security" }
+  ],
+  "mainPath": [
+    "question",
+    "context",
+    "supervisor",
+    "profile",
+    "planner",
+    "analysis"
+  ],
+  "semanticChecks": {
+    "allowedRoots": ["question"],
+    "allowedTerminals": ["response"],
+    "requiredPaths": [
+      { "from": "question", "to": "response" },
+      { "from": "analysis", "to": "report" },
+      { "from": "fallback", "to": "response" }
+    ]
+  },
+  "nodes": [
+    { "id": "question", "lane": "intake", "col": 0, "type": "frontend", "label": "Business Question", "width": 148 },
+    { "id": "context", "lane": "intake", "col": 1, "type": "database", "label": "Load Context", "width": 148 },
+    { "id": "supervisor", "lane": "intake", "col": 2, "type": "backend", "label": "Supervisor", "width": 148 },
+    { "id": "profile", "lane": "grounding", "col": 3, "type": "backend", "label": "Profile Interpreter", "width": 148 },
+    { "id": "planner", "lane": "grounding", "col": 4, "type": "backend", "label": "Planner", "width": 148 },
+    { "id": "analysis", "lane": "grounding", "col": 5, "type": "backend", "label": "Controlled Analysis", "width": 148 },
+    { "id": "stats_claims", "lane": "assurance", "col": 0, "type": "security", "label": "Statistics + Claims", "width": 148 },
+    { "id": "critic", "lane": "assurance", "col": 1, "type": "security", "label": "Critic", "width": 148 },
+    { "id": "visualization", "lane": "assurance", "col": 2, "type": "backend", "label": "Visualization", "width": 148 },
+    { "id": "report", "lane": "delivery", "col": 3, "type": "backend", "label": "Report", "width": 148 },
+    { "id": "response", "lane": "delivery", "col": 4, "type": "frontend", "label": "Persist Response", "width": 148 },
+    { "id": "fallback", "lane": "recovery", "col": 5, "type": "security", "label": "Fallback Response", "width": 148 }
+  ],
+  "edges": [
+    { "id": "submit", "from": "question", "to": "context", "label": "enqueue run", "variant": "default", "role": "main" },
+    { "id": "load", "from": "context", "to": "supervisor", "label": "shared AnalysisState", "variant": "default", "role": "main" },
+    { "id": "supported", "from": "supervisor", "to": "profile", "label": "supported", "variant": "emphasis", "role": "main" },
+    { "id": "unsupported", "from": "supervisor", "to": "fallback", "label": "missing data", "variant": "dashed", "role": "branch" },
+    { "id": "ground", "from": "profile", "to": "planner", "label": "verified columns", "variant": "default", "role": "main" },
+    { "id": "plan", "from": "planner", "to": "analysis", "label": "dependency-safe tasks", "variant": "emphasis", "role": "main" },
+    { "id": "evidence", "from": "analysis", "to": "stats_claims", "label": "persisted evidence", "variant": "emphasis", "role": "main" },
+    { "id": "review", "from": "stats_claims", "to": "critic", "label": "claims + test results", "variant": "default", "role": "main" },
+    { "id": "accepted", "from": "critic", "to": "visualization", "label": "accepted claims", "variant": "emphasis", "role": "main" },
+    { "id": "charts", "from": "visualization", "to": "report", "label": "charts from evidence", "variant": "default", "role": "main" },
+    { "id": "finalize", "from": "report", "to": "response", "label": "validated narrative", "variant": "emphasis", "role": "main" },
+    { "id": "analysis_failure", "from": "analysis", "to": "fallback", "label": "stage failure", "variant": "security", "role": "error" },
+    { "id": "report_failure", "from": "report", "to": "fallback", "label": "generation failure", "variant": "security", "role": "error" },
+    { "id": "recover", "from": "fallback", "to": "response", "label": "saved findings + limitations", "variant": "dashed", "role": "return" }
+  ],
+  "cards": [
+    {
+      "dot": "violet",
+      "title": "Handoff Contract",
+      "items": [
+        "Agents exchange named AnalysisState fields, not free-form peer messages",
+        "Every LLM boundary uses structured validation before the next stage"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Evidence Contract",
+      "items": [
+        "Backend tools calculate values; LLMs interpret and present them",
+        "Claims and charts retain references to persisted evidence codes"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Failure Contract",
+      "items": [
+        "Independent task failures allow partial success; dependent tasks are skipped",
+        "Global recovery returns only committed evidence with explicit limitations"
+      ]
+    }
+  ]
+}

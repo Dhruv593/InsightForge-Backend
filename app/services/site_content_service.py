@@ -168,7 +168,11 @@ class SiteContentService:
 
         try:
             entry = await self.get_email_templates()
-            return EmailTemplatesContent.model_validate(entry.content) if entry is not None else DEFAULT_EMAIL_TEMPLATES
+            if entry is None:
+                return DEFAULT_EMAIL_TEMPLATES
+            merged = DEFAULT_EMAIL_TEMPLATES.model_dump(mode="python")
+            merged.update(entry.content)
+            return EmailTemplatesContent.model_validate(merged)
         except Exception:
             logger.exception("Saved email templates could not be resolved; using application defaults")
             return DEFAULT_EMAIL_TEMPLATES

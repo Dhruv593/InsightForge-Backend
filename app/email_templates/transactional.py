@@ -75,6 +75,13 @@ DEFAULT_EMAIL_TEMPLATES = EmailTemplatesContent.model_validate({
         "body": "Hi {{user_name}},\n\nYour Tatparya account was permanently deleted on {{deleted_at}}.\n\nYour account access has been removed, and your stored datasets are no longer available through Tatparya.",
         "notice": "If you did not request this deletion, contact Tatparya support immediately at {{support_email}}.",
     },
+    "contact_reply": {
+        "subject": "Re: {{original_subject}}",
+        "preheader": "The Tatparya team has replied to your message.",
+        "title": "A reply from Tatparya",
+        "body": "Hi {{contact_name}},\n\nThank you for contacting Tatparya about “{{original_subject}}”.\n\n{{reply_message}}",
+        "notice": "This reply relates to the message you submitted through the Tatparya website.",
+    },
 })
 
 
@@ -215,3 +222,12 @@ def credit_adjusted_email(*, user_name: str, previous_balance: int, adjustment: 
 def account_deleted_email(*, user_name: str, deleted_at: datetime, frontend_url: str, support_email: str, template: EmailTemplateContent | None = None) -> RenderedEmail:
     variables = {"user_name": user_name.strip() or "there", "deleted_at": _format_datetime(deleted_at), "support_email": support_email}
     return _render(template=template or DEFAULT_EMAIL_TEMPLATES.account_deleted, variables=variables, frontend_url=frontend_url, support_email=support_email)
+
+
+def contact_reply_email(*, contact_name: str, original_subject: str, reply_message: str, frontend_url: str, support_email: str, template: EmailTemplateContent | None = None) -> RenderedEmail:
+    variables = {
+        "contact_name": contact_name.strip() or "there",
+        "original_subject": original_subject.strip() or "Your Tatparya enquiry",
+        "reply_message": reply_message.strip(),
+    }
+    return _render(template=template or DEFAULT_EMAIL_TEMPLATES.contact_reply, variables=variables, frontend_url=frontend_url, support_email=support_email)

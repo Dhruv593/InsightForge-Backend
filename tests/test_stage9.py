@@ -11,7 +11,7 @@ from app.schemas.llm import LLMResult, LLMUsage
 from app.schemas.report import FinalReportOutput
 from app.agents import ClaimGeneratorAgent, CriticAgent, ReportAgent, VisualizationAgent
 from app.services.llm.gemini_provider import GeminiProvider
-from app.services.stage9_service import Stage9Failure, Stage9Service
+from app.services.analysis_output_service import AnalysisOutputFailure, AnalysisOutputService
 from app.models.evidence import Evidence
 
 
@@ -20,7 +20,7 @@ def llm_result(content):
 
 
 def service():
-    instance = Stage9Service.__new__(Stage9Service)
+    instance = AnalysisOutputService.__new__(AnalysisOutputService)
     instance.session = SimpleNamespace(add_all=Mock(), flush=AsyncMock(), commit=AsyncMock(), rollback=AsyncMock())
     instance.claims = SimpleNamespace(list_for_run=AsyncMock())
     instance.reviews = SimpleNamespace()
@@ -100,7 +100,7 @@ async def test_claim_generation_links_known_evidence_and_rejects_ungrounded_numb
     async def ungrounded_runner(*_args):
         return llm_result({"claims": [{"claim_code": "C1", "claim_text": "North leads with 99.", "claim_type": "descriptive", "evidence_codes": ["E1"]}]})
 
-    with pytest.raises(Stage9Failure, match="CLAIM_VALIDATION_FAILED"):
+    with pytest.raises(AnalysisOutputFailure, match="CLAIM_VALIDATION_FAILED"):
         await instance.generate_claims(run=run, evidence=evidence, validations=[], run_agent=ungrounded_runner)
 
 
@@ -164,7 +164,7 @@ async def test_visualization_supports_no_chart_and_rejects_unknown_evidence() ->
     async def invalid_runner(*_args):
         return llm_result({"charts": [{"needed": True, "chart_type": "bar", "title": "Revenue", "x_column": "Region", "y_column": "Revenue", "group_column": None, "evidence_codes": ["E9"], "purpose": "Compare regions."}]})
 
-    with pytest.raises(Stage9Failure, match="CHART_SPEC_INVALID"):
+    with pytest.raises(AnalysisOutputFailure, match="CHART_SPEC_INVALID"):
         await instance.create_charts(run=run, claims=[], evidence=[], columns=[{"name": "Region"}, {"name": "Revenue"}], run_agent=invalid_runner)
 
 
@@ -222,12 +222,12 @@ async def test_visualization_supplements_one_model_chart_with_other_chartable_ev
 
 
 def test_chart_data_is_derived_from_evidence_and_report_is_readable() -> None:
-    config = Stage9Service._chart_data(
+    config = AnalysisOutputService._chart_data(
         {"chart_type": "bar", "x_column": "Region", "y_column": "Revenue", "group_column": None},
         [{"result": [{"Region": "North", "value": 310.0}, {"Region": "South", "value": 250.0}]}],
     )
     assert config == {"labels": ["North", "South"], "values": [310.0, 250.0], "x_column": "Region", "y_column": "value"}
-    text = Stage9Service.format_report({"executive_summary": "North led revenue.", "key_findings": [{"finding": "North recorded 310.0."}], "statistical_findings": [], "data_notes": ["Missing values were retained."], "limitations": [], "recommendations": []})
+    text = AnalysisOutputService.format_report({"executive_summary": "North led revenue.", "key_findings": [{"finding": "North recorded 310.0."}], "statistical_findings": [], "data_notes": ["Missing values were retained."], "limitations": [], "recommendations": []})
     assert "Key findings:" in text
     assert "Data notes:" in text
     assert "evidence_code" not in text
@@ -269,7 +269,7 @@ def test_automatic_chart_selection_respects_data_and_explicit_requests(query, ag
     evidence = [{"evidence_code": "E1", "method": "groupby_aggregate",
                  "operation": {"group_by": ["Region"], "metric": "Revenue", "aggregation": aggregation},
                  "result": [{"Region": str(index), "value": value} for index, value in enumerate(values)]}]
-    assert Stage9Service._fallback_chart(query, evidence).chart_type == expected
+    assert AnalysisOutputService._fallback_chart(query, evidence).chart_type == expected
 
 
 @pytest.mark.anyio
@@ -283,7 +283,7 @@ async def test_report_rejects_findings_not_backed_by_an_accepted_claim() -> None
             "statistical_findings": [], "data_notes": [], "limitations": [], "recommendations": [],
         })
 
-    with pytest.raises(Stage9Failure, match="REPORT_VALIDATION_FAILED"):
+    with pytest.raises(AnalysisOutputFailure, match="REPORT_VALIDATION_FAILED"):
         await instance.create_report(
             run=SimpleNamespace(id=uuid4(), llm_provider="gemini", query="Summarize"),
             claims=[{"claim_code": "C1", "evidence_codes": ["E1"], "validated_text": "Accepted finding."}],

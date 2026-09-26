@@ -1,5 +1,7 @@
 # Tatparya Agent Orchestration
 
+> Interactive companion: [`docs/architecture/tatparya-agent-flow.html`](docs/architecture/tatparya-agent-flow.html). The editable workflow source and validation artifact are kept beside it in `docs/architecture/`.
+
 This document explains how Tatparya turns a natural-language business question into calculations, evidence, findings, visuals, and a report. It covers the active execution path, the contract between stages, failure recovery, observability, and the quality metrics that can be reported honestly.
 
 > The examples below are simplified illustrations. Exact values and wording depend on the selected dataset and provider response.
@@ -971,7 +973,7 @@ Tatparya is a sequential, state-driven analysis workflow. The supervisor classif
 | Plan validation | `app/services/analysis_plan_service.py` |
 | Task execution | `app/services/analysis_task_execution_service.py` |
 | Statistical execution | `app/services/statistical_validation_service.py` |
-| Claims, charts, and report assembly | `app/services/stage9_service.py` |
+| Claims, charts, and report assembly | `app/services/analysis_output_service.py` |
 | Provider abstraction and retry | `app/services/llm/` |
 | Agent execution records | `app/services/agent_run_service.py` |
 | Prompts | `app/prompts/` |

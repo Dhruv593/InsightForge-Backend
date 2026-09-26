@@ -21,6 +21,7 @@ from app.models.account_token import AccountToken
 from app.models.content_entry import ContentEntry
 from app.models.llm_settings import LLMSettings
 from app.models.payment_order import PaymentOrder
+from app.models.contact_inquiry import ContactInquiry
 
 __all__ = [
     "AnalysisRun",
@@ -46,4 +47,5 @@ __all__ = [
     "ContentEntry",
     "LLMSettings",
     "PaymentOrder",
+    "ContactInquiry",
 ]

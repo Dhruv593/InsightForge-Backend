@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "visual-check",
+  "evidenceKind": "automated-browser",
+  "status": "fail",
+  "visualReview": "pending",
+  "artifact": {
+    "path": "D:\\M.tech Projects\\InsightForge\\server\\tatparya-agent-flow.html",
+    "sha256": "2ede1c83f786c10b6939f413308bc7e2dea2e9941f3c041e371718f430e58a72",
+    "bytes": 818691
+  },
+  "state": {
+    "detail": "read",
+    "motion": "still"
+  },
+  "chrome": {
+    "status": "available",
+    "executable": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+  },
+  "diagnostics": [
+    {
+      "code": "viewer/visual-check-runtime",
+      "severity": "error",
+      "message": "visual-check could not complete its Chrome inspection.",
+      "subject": {
+        "artifact": "D:\\M.tech Projects\\InsightForge\\server\\tatparya-agent-flow.html"
+      },
+      "evidence": {
+        "reason": "Chrome DevTools process exit failed: Chrome closed with exit code 2147483651\nChrome process: exit code 2147483651.\nChrome stderr:\n[17768:4028:0926/152939.676:ERROR:components\\os_crypt\\async\\browser\\os_crypt_win.cc:63] Failed to encrypt: The system cannot find the file specified. (0x2)\r\n[17768:14144:0926/152939.762:ERROR:chrome\\installer\\util\\google_update_settings_win.cc:270] Failed opening key Software\\Google\\Update\\ClientStateMedium\\{8A69D345-D564-463c-AFF1-A69D9E530F96} to set usagestats; result: 5\r\n[17768:35940:0926/152939.985:ERROR:components\\password_manager\\core\\browser\\password_store\\login_database_async_helper.cc:99] Encryption is not available.\r\n[17768:36868:0926/152939.987:ERROR:components\\password_manager\\core\\browser\\password_store\\login_database_async_helper.cc:99] Encryption is not available.\r\n[17768:4028:0926/152940.159:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1054] GPU process exited unexpectedly: exit_code=-1073741790\r\n[17768:28600:0926/152940.160:ERROR:components\\viz\\host\\persistent_cache_sandboxed_file_factory.cc:153] Failed to open persistent cache files in directory \"C:\\Users\\cocdh\\AppData\\Local\\Temp\\archify-visual-check-profile-V2U8bB\\GPUPersistentCache\\DawnGraphiteCache\\ZBRSUVJ7IMDXK2RUP4UNAHPCKJL4BWQB\", error: 0: The process cannot access the file because it is being used by another process. (0x20)\r\n[17768:4028:0926/152940.219:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1054] GPU process exited unexpectedly: exit_code=-1073741790\r\n[17768:4028:0926/152940.245:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1054] GPU process exited unexpectedly: exit_code=-1073741790\r\n[17768:1972:0926/152940.246:ERROR:components\\viz\\host\\persistent_cache_sandboxed_file_factory.cc:153] Failed to open persistent cache files in directory \"C:\\Users\\cocdh\\AppData\\Local\\Temp\\archify-visual-check-profile-V2U8bB\\GPUPersistentCache\\DawnGraphiteCache\\ZBRSUVJ7IMDXK2RUP4UNAHPCKJL4BWQB\", error: 0: The process cannot access the file because it is being used by another process. (0x20)\r\n[17768:4028:0926/152940.276:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1054] GPU process exited unexpectedly: exit_code=-1073741790\r\n[17768:3448:0926/152940.279:ERROR:components\\viz\\host\\persistent_cache_sandboxed_file_factory.cc:153] Failed to open persistent cache files in directory \"C:\\Users\\cocdh\\AppData\\Local\\Temp\\archify-visual-check-profile-V2U8bB\\GPUPersistentCache\\DawnGraphiteCache\\ZBRSUVJ7IMDXK2RUP4UNAHPCKJL4BWQB\", error: 0: The process cannot access the file because it is being used by another process. (0x20)\r\n[17768:4028:0926/152940.302:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1054] GPU process exited unexpectedly: exit_code=-1073741790\r\n[17768:14804:0926/152940.304:ERROR:components\\viz\\host\\persistent_cache_sandboxed_file_factory.cc:153] Failed to open persistent cache files in directory \"C:\\Users\\cocdh\\AppData\\Local\\Temp\\archify-visual-check-profile-V2U8bB\\GPUPersistentCache\\DawnGraphiteCache\\ZBRSUVJ7IMDXK2RUP4UNAHPCKJL4BWQB\", error: 0: The process cannot access the file because it is being used by another process. (0x20)\r\n[17768:4028:0926/152940.323:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1054] GPU process exited unexpectedly: exit_code=-1073741790\r\n[17768:4028:0926/152940.323:FATAL:content\\browser\\gpu\\gpu_data_manager_impl_private.cc:417] GPU process isn't usable. Goodbye."
+      },
+      "supportedFixes": [
+        "resolve the reported Chrome inspection error, then rerun visual-check"
+      ]
+    }
+  ],
+  "containment": {
+    "status": "fail",
+    "viewports": []
+  },
+  "readability": {
+    "status": "fail",
+    "minimumProjectedNodeTextPx": 6,
+    "viewports": []
+  },
+  "viewerChrome": {
+    "status": "fail",
+    "viewports": []
+  },
+  "captures": {
+    "status": "fail",
+    "screenshots": [],
+    "contactSheet": null
+  },
+  "sidecars": {
+    "receipt": "tatparya-agent-flow.visual-check.json",
+    "contactSheet": "tatparya-agent-flow.visual-check.html"
+  },
+  "error": "Chrome DevTools process exit failed: Chrome closed with exit code 2147483651\nChrome process: exit code 2147483651.\nChrome stderr:\n[17768:4028:0926/152939.676:ERROR:components\\os_crypt\\async\\browser\\os_crypt_win.cc:63] Failed to encrypt: The system cannot find the file specified. (0x2)\r\n[17768:14144:0926/152939.762:ERROR:chrome\\installer\\util\\google_update_settings_win.cc:270] Failed opening key Software\\Google\\Update\\ClientStateMedium\\{8A69D345-D564-463c-AFF1-A69D9E530F96} to set usagestats; result: 5\r\n[17768:35940:0926/152939.985:ERROR:components\\password_manager\\core\\browser\\password_store\\login_database_async_helper.cc:99] Encryption is not available.\r\n[17768:36868:0926/152939.987:ERROR:components\\password_manager\\core\\browser\\password_store\\login_database_async_helper.cc:99] Encryption is not available.\r\n[17768:4028:0926/152940.159:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1054] GPU process exited unexpectedly: exit_code=-1073741790\r\n[17768:28600:0926/152940.160:ERROR:components\\viz\\host\\persistent_cache_sandboxed_file_factory.cc:153] Failed to open persistent cache files in directory \"C:\\Users\\cocdh\\AppData\\Local\\Temp\\archify-visual-check-profile-V2U8bB\\GPUPersistentCache\\DawnGraphiteCache\\ZBRSUVJ7IMDXK2RUP4UNAHPCKJL4BWQB\", error: 0: The process cannot access the file because it is being used by another process. (0x20)\r\n[17768:4028:0926/152940.219:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1054] GPU process exited unexpectedly: exit_code=-1073741790\r\n[17768:4028:0926/152940.245:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1054] GPU process exited unexpectedly: exit_code=-1073741790\r\n[17768:1972:0926/152940.246:ERROR:components\\viz\\host\\persistent_cache_sandboxed_file_factory.cc:153] Failed to open persistent cache files in directory \"C:\\Users\\cocdh\\AppData\\Local\\Temp\\archify-visual-check-profile-V2U8bB\\GPUPersistentCache\\DawnGraphiteCache\\ZBRSUVJ7IMDXK2RUP4UNAHPCKJL4BWQB\", error: 0: The process cannot access the file because it is being used by another process. (0x20)\r\n[17768:4028:0926/152940.276:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1054] GPU process exited unexpectedly: exit_code=-1073741790\r\n[17768:3448:0926/152940.279:ERROR:components\\viz\\host\\persistent_cache_sandboxed_file_factory.cc:153] Failed to open persistent cache files in directory \"C:\\Users\\cocdh\\AppData\\Local\\Temp\\archify-visual-check-profile-V2U8bB\\GPUPersistentCache\\DawnGraphiteCache\\ZBRSUVJ7IMDXK2RUP4UNAHPCKJL4BWQB\", error: 0: The process cannot access the file because it is being used by another process. (0x20)\r\n[17768:4028:0926/152940.302:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1054] GPU process exited unexpectedly: exit_code=-1073741790\r\n[17768:14804:0926/152940.304:ERROR:components\\viz\\host\\persistent_cache_sandboxed_file_factory.cc:153] Failed to open persistent cache files in directory \"C:\\Users\\cocdh\\AppData\\Local\\Temp\\archify-visual-check-profile-V2U8bB\\GPUPersistentCache\\DawnGraphiteCache\\ZBRSUVJ7IMDXK2RUP4UNAHPCKJL4BWQB\", error: 0: The process cannot access the file because it is being used by another process. (0x20)\r\n[17768:4028:0926/152940.323:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1054] GPU process exited unexpectedly: exit_code=-1073741790\r\n[17768:4028:0926/152940.323:FATAL:content\\browser\\gpu\\gpu_data_manager_impl_private.cc:417] GPU process isn't usable. Goodbye."
+}

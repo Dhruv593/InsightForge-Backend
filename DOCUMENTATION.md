@@ -1,5 +1,7 @@
 # Tatparya API — Engineering Documentation
 
+The interactive agent-orchestration diagram is available at [`docs/architecture/tatparya-agent-flow.html`](docs/architecture/tatparya-agent-flow.html); its editable source and validation artifact live in the same directory.
+
 This is the technical reference for maintaining and extending the Tatparya backend. It describes request flow, endpoint ownership, persistence, the multi-agent pipeline, safeguards, and the exact areas normally changed for a new feature.
 
 ## 1. Architectural principles
@@ -266,7 +268,7 @@ The result includes p-value, effect size when defined, assumptions, warnings, va
 
 ### Claims, visuals, and report
 
-`app/services/stage9_service.py` coordinates downstream persistence and deterministic fallbacks.
+`app/services/analysis_output_service.py` coordinates downstream persistence and deterministic fallbacks.
 
 - At most 12 claims per run.
 - Claims link to evidence through `claim_evidence`.
@@ -379,6 +381,11 @@ All paths below are relative to `/api/v1`.
 | `POST` | `/admin/blogs` | Admin | Create post |
 | `PUT` | `/admin/blogs/:slug` | Admin | Update post/slug/status |
 | `DELETE` | `/admin/blogs/:slug` | Admin | Delete post |
+| `POST` | `/site-content/contact` | Public | Store a landing-page contact inquiry and attempt the admin notification email |
+| `GET` | `/admin/contact-inquiries` | Admin | List/filter inquiries with total and status counts |
+| `GET` | `/admin/contact-inquiries/:id` | Admin | Read one inquiry |
+| `PATCH` | `/admin/contact-inquiries/:id` | Admin | Mark an inquiry new, read, replied, or closed |
+| `POST` | `/admin/contact-inquiries/:id/reply` | Admin | Send the editable contact-reply email and record the reply |
 
 Schemas in `app/schemas` are the authoritative payload/response definition. In development, use `/docs` for live examples.
 
@@ -434,7 +441,8 @@ Most user-content relationships cascade on account/dataset/conversation deletion
 - `analysis_job_queue.py`: background queue.
 - `analysis_execution_service.py`: full run transaction/orchestration.
 - `analysis_plan_service.py`, `analysis_task_execution_service.py`: validated tasks and tools.
-- `stage9_service.py`: claims, reviews, visuals, reports, fallbacks.
+- `analysis_output_service.py`: claims, reviews, visuals, reports, fallbacks.
+- `deterministic_recommendations.py`: domain-neutral evidence-based fallback actions, with a compatibility wrapper for revenue-focused callers.
 - `analysis_recovery.py`: safe degraded answer.
 - `site_content_service.py`: landing/blog persistence.
 - `cloudinary_service.py`: dataset and content-image integration.
@@ -531,7 +539,7 @@ Never accept model-written Python or SQL.
 
 1. Add it to `SUPPORTED_CHART_TYPES`.
 2. Extend chart schemas/validation.
-3. Update `Stage9Service._chart_data` and deterministic fallback selection.
+3. Update `AnalysisOutputService._chart_data` and deterministic fallback selection.
 4. Ensure values can only be derived from evidence.
 5. Update the frontend `chartFigure.js` and PDF path.
 6. Test duplicate suppression, empty data, screen rendering, and PDF consistency.
@@ -612,9 +620,19 @@ The in-memory rate limiter is per process. For multiple API instances or stricte
 
 ## 13. Logging, monitoring, and LangSmith
 
-`app/core/logging_config.py` configures console and rotating JSONL files. HTTP middleware adds an `x-request-id` response header and logs method, path, status, and duration without logging bodies.
+`app/core/logging_config.py` configures a shared structured logging pipeline. In production, console output is JSON so the deployment platform is the durable source of truth even when local disk is ephemeral. When `LOG_DIR` is writable, the same records are copied into rotating `insightforge.jsonl` and error-only `errors.jsonl` files. Development console output remains compact and human-readable.
 
-Analysis events include IDs, stages, error codes, and validation reasons. Secrets and raw request/response bodies should never be added to logs.
+Every record has a stable `event`, service name, environment, UTC timestamp, severity, logger, and message. Context variables automatically propagate the available `request_id`, `analysis_run_id`, `user_id`, `conversation_id`, and `dataset_id` through async request and background-job execution. HTTP middleware returns `x-request-id` and emits start/completion/failure events with method, path, status, response size, and duration. Uvicorn/Gunicorn errors use the same handlers; noisy access, SQL, and HTTP-client logs stay restricted.
+
+The main analysis lifecycle is observable through these events:
+
+- `analysis.job.started`, `analysis.job.completed`, `analysis.job.failed`, `analysis.job.cancelled`, `analysis.job.skipped`
+- `analysis.agent.completed`, `analysis.agent.failed`
+- `analysis.run.completed`
+
+Exception records retain exception type and safe stack-frame locations, while exception messages are withheld because provider and database errors can contain credentials or business data. URLs, bearer tokens, passwords, API keys, and secrets are redacted as a second line of defense. Do not log request bodies, user queries, dataset rows, prompts, provider responses, or authentication credentials.
+
+Use the returned `x-request-id` to investigate an HTTP failure and `analysis_run_id` to follow work after it moves to the queue. On Render, filter the service logs by these fields or by the event name. Locally, use `Get-Content logs\insightforge*.jsonl | ConvertFrom-Json` and filter the resulting objects.
 
 `app/core/tracing.py` implements optional LangSmith traces. Metadata-only mode is the production-safe default. `LANGSMITH_DETAIL_MODE` is forbidden in production.
 

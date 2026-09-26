@@ -26,7 +26,7 @@ The analysis system uses LLMs for bounded planning and interpretation while Pyth
 
 ## Technology
 
-- Python 3.11+ (Render uses Python 3.12.8)
+- Python 3.12.x (the repository and Render are pinned to Python 3.12.8)
 - FastAPI and Uvicorn
 - PostgreSQL, SQLAlchemy 2, Psycopg, and Alembic
 - Pydantic 2
@@ -39,11 +39,14 @@ The analysis system uses LLMs for bounded planning and interpretation while Pyth
 
 ```powershell
 cd server
+python --version # must report Python 3.12.x
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
+
+Do not reuse a `.venv` created by another Python version. Remove and recreate that environment after installing Python 3.12.8; newer Windows runtimes can exhibit test-runner shutdown problems even after every test has completed.
 
 Create a PostgreSQL database and set at least the required values in `.env`:
 
@@ -196,11 +199,13 @@ pip-audit -r requirements.txt
 
 ## Logs and tracing
 
-Runtime logs are written as JSON Lines:
+Production emits structured JSON to stdout, so events remain visible in the hosting provider's log viewer even when its filesystem is ephemeral. The same events are also written to rotating JSON Lines files when the log directory is writable:
 
 - `logs/insightforge.jsonl`: application events
 - `logs/errors.jsonl`: errors
 - process-suffixed files may be used when Windows reload mode locks a base log file
+
+Each record includes an `event`, `service`, `environment`, and any available correlation identifiers: `request_id`, `analysis_run_id`, `user_id`, `conversation_id`, and `dataset_id`. The API returns `x-request-id` on every handled response. Use that value to find the entire request path. Request bodies, queries, dataset rows, access tokens, and provider responses are intentionally excluded.
 
 Follow errors in PowerShell:
 
@@ -213,6 +218,16 @@ Search one analysis:
 ```powershell
 Select-String -Path .\logs\*.jsonl -Pattern '<analysis-run-id>'
 ```
+
+Inspect one request as parsed JSON:
+
+```powershell
+Get-Content .\logs\insightforge*.jsonl |
+  ConvertFrom-Json |
+  Where-Object request_id -eq '<x-request-id>'
+```
+
+Useful lifecycle events include `http.request.started`, `http.request.completed`, `http.request.failed`, `analysis.job.started`, `analysis.agent.completed`, `analysis.agent.failed`, `analysis.run.completed`, and `analysis.job.failed`.
 
 LangSmith setup is documented in [LANGSMITH.md](./LANGSMITH.md). Google sign-in setup is documented in [GOOGLE_SIGN_IN.md](./GOOGLE_SIGN_IN.md).
 
@@ -244,3 +259,8 @@ Continue with [DOCUMENTATION.md](./DOCUMENTATION.md) for:
 - module/file ownership
 - adding endpoints, models, migrations, agents, prompts, tools, chart types, providers, and CMS fields
 - security, logging, recovery, testing, and deployment guidance
+
+Agent-specific references:
+
+- [AGENT_PROCESS.md](./AGENT_PROCESS.md) explains the orchestration stages, contracts, fallbacks, and accuracy controls.
+- [Interactive agent-flow diagram](./docs/architecture/tatparya-agent-flow.html) provides a presentation-ready visual companion.

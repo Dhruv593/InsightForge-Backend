@@ -122,8 +122,8 @@ async def prepare_response(state: AnalysisState) -> dict[str, object]:
             "assistant_message": ("This request cannot be supported with the available dataset. " + " ".join(_plain_text(item) for item in decision.missing_requirements)).strip(),
         }
     if state.get("final_report"):
-        from app.services.stage9_service import Stage9Service
-        return {"current_node": "prepare_response", "assistant_message": Stage9Service.format_report(state["final_report"])}
+        from app.services.analysis_output_service import AnalysisOutputService
+        return {"current_node": "prepare_response", "assistant_message": AnalysisOutputService.format_report(state["final_report"])}
     if state.get("evidence"):
         from app.services.analysis_task_execution_service import AnalysisTaskExecutionService
         return {

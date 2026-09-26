@@ -5,6 +5,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppError, InvalidAccessTokenError
+from app.core.logging_config import update_log_context
 from app.db.session import get_db_session
 from app.models.user import User
 from app.services.auth_service import AuthService
@@ -69,7 +70,9 @@ async def get_current_user(
 ) -> User:
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise InvalidAccessTokenError
-    return await auth_service.get_user_from_access_token(credentials.credentials)
+    user = await auth_service.get_user_from_access_token(credentials.credentials)
+    update_log_context(user_id=user.id)
+    return user
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]

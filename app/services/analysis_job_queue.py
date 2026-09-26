@@ -1,8 +1,10 @@
 import asyncio
 import logging
+from time import perf_counter
 from uuid import UUID
 
 from app.core.exceptions import AppError
+from app.core.logging_config import bind_log_context, reset_log_context
 from app.db.session import AsyncSessionFactory
 from app.models.analysis_run import AnalysisRun
 from app.models.user import User
@@ -16,6 +18,7 @@ class AnalysisJobQueue:
     """Small durable DB-backed queue suitable for the single Render web process."""
 
     def __init__(self, concurrency: int = 1, poll_seconds: float = 1.5) -> None:
+        self._concurrency = concurrency
         self._semaphore = asyncio.Semaphore(concurrency)
         self._poll_seconds = poll_seconds
         self._tasks: dict[UUID, asyncio.Task] = {}
@@ -33,6 +36,12 @@ class AnalysisJobQueue:
             except Exception:
                 logger.exception("Interrupted analyses could not be requeued during startup; polling will continue")
             self._poller = asyncio.create_task(self._poll(), name="analysis-queue-poller")
+            logger.info(
+                "Analysis queue started concurrency=%s poll_seconds=%s",
+                self._concurrency,
+                self._poll_seconds,
+                extra={"event": "analysis.queue.started", "concurrency": self._concurrency, "poll_seconds": self._poll_seconds},
+            )
 
     async def stop(self) -> None:
         if self._poller:
@@ -44,6 +53,7 @@ class AnalysisJobQueue:
             await asyncio.gather(*pending, return_exceptions=True)
         self._tasks.clear()
         self._poller = None
+        logger.info("Analysis queue stopped", extra={"event": "analysis.queue.stopped"})
 
     def notify(self) -> None:
         self._wake.set()
@@ -75,11 +85,15 @@ class AnalysisJobQueue:
                 await asyncio.sleep(self._poll_seconds)
 
     async def _run(self, analysis_run_id: UUID) -> None:
-        async with self._semaphore:
-            try:
+        context_token = bind_log_context(analysis_run_id=analysis_run_id)
+        started = perf_counter()
+        try:
+            logger.info("Background analysis started", extra={"event": "analysis.job.started"})
+            async with self._semaphore:
                 async with AsyncSessionFactory() as session:
                     run = await session.get(AnalysisRun, analysis_run_id)
                     if run is None or run.status != "pending":
+                        logger.info("Background analysis skipped status=%s", getattr(run, "status", "missing"), extra={"event": "analysis.job.skipped", "status": getattr(run, "status", "missing")})
                         return
                     user = await session.get(User, run.user_id)
                     if user is None or not user.is_active:
@@ -87,13 +101,18 @@ class AnalysisJobQueue:
                         await session.commit()
                         return
                     await AnalysisExecutionService(session).execute(run.id, user)
-            except asyncio.CancelledError:
-                raise
-            except AppError as exc:
-                logger.warning("Background analysis ended analysis_run_id=%s code=%s", analysis_run_id, exc.code)
-            except Exception:
-                logger.exception("Background analysis failed analysis_run_id=%s", analysis_run_id)
-                await self._mark_failed(analysis_run_id)
+        except asyncio.CancelledError:
+            logger.warning("Background analysis cancelled", extra={"event": "analysis.job.cancelled", "duration_ms": round((perf_counter() - started) * 1000, 2)})
+            raise
+        except AppError as exc:
+            logger.warning("Background analysis ended code=%s", exc.code, extra={"event": "analysis.job.failed", "error_code": exc.code, "duration_ms": round((perf_counter() - started) * 1000, 2)})
+        except Exception:
+            logger.exception("Background analysis failed", extra={"event": "analysis.job.failed", "error_code": "BACKGROUND_EXECUTION_FAILED", "duration_ms": round((perf_counter() - started) * 1000, 2)})
+            await self._mark_failed(analysis_run_id)
+        else:
+            logger.info("Background analysis completed", extra={"event": "analysis.job.completed", "duration_ms": round((perf_counter() - started) * 1000, 2)})
+        finally:
+            reset_log_context(context_token)
 
     @staticmethod
     async def _mark_failed(analysis_run_id: UUID) -> None:

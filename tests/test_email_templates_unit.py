@@ -7,6 +7,7 @@ from app.email_templates import (
     DEFAULT_EMAIL_TEMPLATES,
     account_deleted_email,
     credit_adjusted_email,
+    contact_reply_email,
     email_verification_email,
     password_changed_email,
     password_reset_email,
@@ -45,6 +46,7 @@ def test_all_transactional_templates_render_both_mime_bodies():
         payment_confirmation_email(user_name="Dhruv", plan_name="Growth", credits_added=25, credit_balance=30, amount_minor=49900, currency="INR", payment_id="pay_test123", paid_at=now, **COMMON),
         credit_adjusted_email(user_name="Dhruv", previous_balance=5, adjustment=10, new_balance=15, reason="Customer support correction", **COMMON),
         account_deleted_email(user_name="Dhruv", deleted_at=now, **COMMON),
+        contact_reply_email(contact_name="Dhruv", original_subject="Product demo", reply_message="We would be happy to help.", **COMMON),
     ]
 
     for email in emails:
@@ -58,6 +60,10 @@ def test_all_transactional_templates_render_both_mime_bodies():
     assert "₹499.00" in payment.text
     assert "25" in payment.text
     assert "pay_test123" in payment.text
+
+    contact_reply = emails[-1]
+    assert contact_reply.subject == "Re: Product demo"
+    assert "We would be happy to help." in contact_reply.text
 
 
 def test_credit_adjustment_requires_a_meaningful_reason():
