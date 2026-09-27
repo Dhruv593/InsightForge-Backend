@@ -81,7 +81,7 @@ async def adjust_user_credits(
         new_balance=remaining,
         reason=payload.reason,
         frontend_url=settings.frontend_url,
-        support_email=settings.support_email.strip() or settings.smtp_from_email.strip(),
+        support_email=settings.support_email.strip() or settings.delivery_from_email,
         template=templates.credit_adjusted,
     )
     try:

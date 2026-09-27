@@ -138,7 +138,7 @@ async def submit_contact(
         return ContactResponse(message=success_message)
     inquiry = await inquiries.create(payload)
     settings = get_settings()
-    recipient = str(landing.contact.recipient_email) if landing is not None else (settings.support_email.strip() or settings.smtp_from_email.strip())
+    recipient = str(landing.contact.recipient_email) if landing is not None else (settings.support_email.strip() or settings.delivery_from_email)
     if not recipient:
         await inquiries.record_notification(inquiry, "not_configured")
         logger.warning("Contact notification recipient is not configured inquiry_id=%s", inquiry.id, extra={"event": "contact.notification.not_configured", "inquiry_id": str(inquiry.id)})

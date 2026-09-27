@@ -80,7 +80,7 @@ class ContactInquiryService:
             original_subject=inquiry.subject,
             reply_message=message,
             frontend_url=settings.frontend_url,
-            support_email=settings.support_email.strip() or settings.smtp_from_email.strip(),
+            support_email=settings.support_email.strip() or settings.delivery_from_email,
             template=templates.contact_reply,
         )
         try:

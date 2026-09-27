@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from email.utils import parseaddr
 
 from pydantic import Field, PostgresDsn, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -35,6 +36,10 @@ class Settings(BaseSettings):
     jwt_algorithm: Literal["HS256", "HS384", "HS512"] = "HS256"
     access_token_expire_minutes: int = Field(default=30, gt=0)
     refresh_token_expire_days: int = Field(default=7, gt=0)
+    email_provider: Literal["smtp", "brevo"] = "smtp"
+    brevo_api_key: SecretStr | None = None
+    brevo_from_email: str = ""
+    brevo_from_name: str = "Tatparya"
     smtp_host: str = ""
     smtp_port: int = Field(default=587, gt=0)
     smtp_username: str = ""
@@ -64,6 +69,11 @@ class Settings(BaseSettings):
     llm_request_timeout_seconds: int = Field(default=60, gt=0, le=300)
     max_expanded_file_mb: int = Field(default=100, gt=0, le=512)
     max_dataset_columns: int = Field(default=200, gt=0, le=1000)
+
+    @property
+    def delivery_from_email(self) -> str:
+        configured = self.brevo_from_email if self.email_provider == "brevo" else self.smtp_from_email
+        return parseaddr(configured)[1]
 
     @model_validator(mode="after")
     def production_safety(self):

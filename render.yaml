@@ -60,6 +60,16 @@ services:
         value: insightforge-production
       - key: LANGSMITH_PROJECT_URL
         sync: false
+      - key: EMAIL_PROVIDER
+        value: brevo
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_FROM_EMAIL
+        sync: false
+      - key: BREVO_FROM_NAME
+        value: Tatparya
+      - key: SUPPORT_EMAIL
+        sync: false
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT

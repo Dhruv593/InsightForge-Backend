@@ -109,7 +109,7 @@ At least one complete provider pair is needed for analyses:
 ### Optional integrations
 
 - Google sign-in: `GOOGLE_CLIENT_ID`
-- Email delivery: `SMTP_*`
+- Email delivery: `EMAIL_PROVIDER=brevo` with `BREVO_API_KEY`, `BREVO_FROM_EMAIL`, and `BREVO_FROM_NAME` in production, or `EMAIL_PROVIDER=smtp` with `SMTP_*` locally
 - LangSmith: `LANGSMITH_*`
 - Owner access: comma-separated `ADMIN_EMAILS`
 
@@ -158,7 +158,7 @@ See `GOOGLE_SIGN_IN.md` for console setup.
 
 ### Account recovery
 
-`account_tokens` stores hashed, expiring verification/reset tokens. `app/services/account_service.py` creates/consumes tokens and `app/services/email_service.py` delivers links when SMTP is configured.
+`account_tokens` stores hashed, expiring verification/reset tokens. `app/services/account_service.py` creates/consumes tokens and `app/services/email_service.py` delivers all transactional email through either the Brevo HTTPS API or SMTP. The transport is selected with `EMAIL_PROVIDER`.
 
 ## 6. Data and analysis lifecycle
 
@@ -712,7 +712,7 @@ Required hosted values include:
 - JWT secret
 - selected LLM provider credentials/models
 - `ADMIN_EMAILS`
-- optional Google, SMTP, and LangSmith configuration
+- optional Google, Brevo/SMTP, and LangSmith configuration
 
 ### Health monitoring
 
@@ -731,7 +731,7 @@ for lightweight uptime checks. Use `/health/db` for deployment health checks tha
 3. Run `pip-audit` and review results.
 4. Confirm `APP_ENV=production`, `DEBUG=false`, `SQL_ECHO=false`.
 5. Confirm frontend/backend origins match exactly.
-6. Confirm Cloudinary deletion/upload, Google login, and SMTP if enabled.
+6. Confirm Cloudinary deletion/upload, Google login, and transactional email delivery if enabled.
 7. Submit analyses with both configured providers.
 8. Inspect normal, failed, cancelled, recovered, and restarted queued runs.
 9. Verify owner-only routes with both admin and ordinary accounts.

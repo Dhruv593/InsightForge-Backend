@@ -170,6 +170,7 @@ class PaymentService:
             frontend_url = getattr(self.settings, "frontend_url", "http://localhost:5173")
             support_email = (
                 getattr(self.settings, "support_email", "")
+                or getattr(self.settings, "delivery_from_email", "")
                 or getattr(self.settings, "smtp_from_email", "")
             )
             email = payment_confirmation_email(

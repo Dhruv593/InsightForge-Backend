@@ -106,7 +106,7 @@ The complete template is in [`.env.example`](./.env.example).
 | Database | `DATABASE_URL` |
 | Frontend/admin | `FRONTEND_URL`, `ADMIN_EMAILS` |
 | Authentication | `JWT_SECRET_KEY`, `JWT_ALGORITHM`, expiry settings, `GOOGLE_CLIENT_ID` |
-| Email | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`, `SUPPORT_EMAIL`, `SMTP_USE_TLS` |
+| Email | `EMAIL_PROVIDER`, `BREVO_API_KEY`, `BREVO_FROM_EMAIL`, `BREVO_FROM_NAME`, or the existing `SMTP_*` settings; `SUPPORT_EMAIL` |
 | Storage/profile | Cloudinary keys, `MAX_UPLOAD_SIZE_MB`, `MAX_PROFILE_ROWS`, `MAX_EXPANDED_FILE_MB`, `MAX_DATASET_COLUMNS` |
 | LLM | Gemini/Groq keys and models, `LLM_REQUEST_TIMEOUT_SECONDS` |
 | Observability | logging settings and `LANGSMITH_*` |

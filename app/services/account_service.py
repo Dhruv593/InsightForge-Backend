@@ -203,7 +203,7 @@ class AccountService:
     @staticmethod
     def _support_email() -> str:
         settings = get_settings()
-        return settings.support_email.strip() or settings.smtp_from_email.strip()
+        return settings.support_email.strip() or settings.delivery_from_email
 
     async def _send_best_effort(self, recipient: str, email: RenderedEmail, event: str, user_id: UUID) -> None:
         try:
